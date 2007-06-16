@@ -179,13 +179,7 @@ class System:
     def checkIntersected(self):
         all = 0
         for i in xrange(self.N):
-            E = c_energy_i_4c(
-                self.q.ctypes.data,
-                self.N,
-                i,
-                self.boxsize.ctypes.data,
-                all | 2,
-                )
+            E = c_energy_i_4c(self.SD_p, i, all|2)
     def checkEnergyConsistency(self):
         E_fromall = self.energy_fromall()
         E_fromi = self.energy_fromi()
