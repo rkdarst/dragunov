@@ -25,6 +25,7 @@ class SimData(ctypes.Structure):
                 ("Nmax", ctypes.c_int),
                 ("ndim", ctypes.c_int),
                 ("beta", ctypes.c_double),
+                ("atomtypes", ctypes.c_void_p),
                 ]
 SimData_p = ctypes.POINTER(SimData)
 
@@ -60,11 +61,14 @@ class System:
         self.ntry = 0
 
         self.q = numpy.zeros(shape=(self.Nmax, 3), dtype=numpy.float)
-        SD.q =   self.q.ctypes.data
+        SD.q   = self.q.ctypes.data
         self.ei = numpy.zeros(shape=(self.Nmax, ), dtype=numpy.float)
         self.pairlist = numpy.zeros(shape=(self.Nmax, 15), dtype=numpy.int)
         self.boxsize = numpy.asarray((10, 10, 10), dtype=numpy.float)
-        SD.boxsize =   self.boxsize.ctypes.data
+        SD.boxsize   = self.boxsize.ctypes.data
+        self.atomtypes = numpy.zeros(shape=(self.Nmax), dtype=numpy.int)
+        SD.atomtypes   = self.atomtypes.ctypes.data
+        self.atomtypes[0:self.N] = 0   # default to zero
 
     def fill(self):
         for i in range(self.N):
@@ -124,15 +128,8 @@ class System:
             return 0
 
     def trialMove(self, verbose=False):
-        #print
-        #print
-        #print
-        #print
-        #self.checkContiguous()
         i = int(math.floor(random.random()*self.N))
-        #print i
         qi_old = self.q[i].copy()
-        #Eold = self.energy_i(i)
         Eold = self.ei[i]
 
         # v randn returns normal gaussion distributed points
@@ -140,7 +137,6 @@ class System:
         self.q[i] = qi_old + vec
 
         Enew = self.energy_i(i)
-        #print "Eold:", Eold, "Enew:", Enew
         if Enew <= Eold:     # always accept, E decreases
             accept = True
         else:                # accept with prob
@@ -201,6 +197,7 @@ class System:
             for i in range(self.N):
                 display[i].pos = q[i]
     def makebox(self):
+        visual.scene.center = (5, 5, 5)
         radius = .02
         x,y,z = self.boxsize
         c = visual.color.blue
@@ -226,9 +223,18 @@ if __name__ == "__main__":
         for i in range(100000):
             S.trialMove()
         S.checkEnergyConsistency()
-    else:
+    elif len(sys.argv) > 1 and sys.argv[1] == "demo":
         S.makebox()
-        visual.scene.center = (5, 5, 5)
+        i = 0
+        while True:
+            S.display()
+            S.trialMove()
+            if i%100 == 0:
+                print "\r%9d"%i,
+                sys.stdout.flush()
+            i += 1
+        S.checkEnergyConsistency()
+    else:
         i = 0
         while True:
             print i,
