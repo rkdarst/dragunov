@@ -17,6 +17,11 @@ try:
 except ImportError:
     pass
 
+SVD_ENERGYI_PARTIAL = 1
+SVD_VERBOSE_1       = 2
+SVD_VERBOSE_2       = 4
+
+
 class SimData(ctypes.Structure):
     _fields_ = [("q", ctypes.c_void_p),
                 ("boxsize", ctypes.c_void_p),
@@ -26,6 +31,7 @@ class SimData(ctypes.Structure):
                 ("ndim", ctypes.c_int),
                 ("beta", ctypes.c_double),
                 ("atomtypes", ctypes.c_void_p),
+                ("ei", ctypes.c_void_p),
                 ]
 SimData_p = ctypes.POINTER(SimData)
 
@@ -35,19 +41,21 @@ dragunov_c.eij.argtypes = (ctypes.c_int,
                            ctypes.c_int,
                            ctypes.c_double, )
 dragunov_c.energy_i_4c.restype = ctypes.c_double
-#dragunov_c.energy_i_4c.argtypes = (ctypes.c_void_p, # qdata_p
-#                                   ctypes.c_int,    # N
-#                                   ctypes.c_int,    # boxsize
-#                                   ctypes.c_void_p, # boxsize_p
-#                                   ctypes.c_int,    # flags
-#                                   )
-dragunov_c.energy_i_4c.argtypes = (SimData_p, # qdata_p
+dragunov_c.energy_i_4c.argtypes = (SimData_p,       # qdata_p
                                    ctypes.c_int,    # i
-                                   ctypes.c_int,    # flags
-                                   )
+                                   ctypes.c_int)    # flags
+dragunov_c.trialMove.restype = ctypes.c_int
+dragunov_c.trialMove.argtypes = (SimData_p,       # qdata_p
+                                 ctypes.c_int)    # n, number of moves
 
 c_eij = dragunov_c.eij
 c_energy_i_4c = dragunov_c.energy_i_4c
+
+dragunov_c.init_gen_rand.restype = None
+print dragunov_c.init_mt(10)
+#print dragunov_c.gen_rand(10)
+#print dragunov_c.init_gen_rand(10)
+#sys.exit()
 
 class System:    
     def __init__(self):
@@ -63,6 +71,7 @@ class System:
         self.q = numpy.zeros(shape=(self.Nmax, 3), dtype=numpy.float)
         SD.q   = self.q.ctypes.data
         self.ei = numpy.zeros(shape=(self.Nmax, ), dtype=numpy.float)
+        SD.ei   = self.ei.ctypes.data
         self.pairlist = numpy.zeros(shape=(self.Nmax, 15), dtype=numpy.int)
         self.boxsize = numpy.asarray((10, 10, 10), dtype=numpy.float)
         SD.boxsize   = self.boxsize.ctypes.data
@@ -71,6 +80,7 @@ class System:
         self.atomtypes[0:self.N] = 0   # default to zero
 
     def fill(self):
+        """Fill the box with a crystal structure"""
         for i in range(self.N):
             x = i % 10
             y = (i-x) % 100 // 10
@@ -82,22 +92,26 @@ class System:
         for i in range(self.N):
             self.ei[i] = self.energy_i(i)
     def energy_fromall(self):
+        """Return total energy by evaluating energy for all atoms"""
         E = 0
         q = self.q
         for i in range(self.N):
-            E+= self.energy_i(i, all=False)
+            E+= self.energy_i(i, partial=True)
         return E
     def energy_fromi(self):
-        return sum(self.ei[1:self.N])
+        """Return total energy by using sum of cached values for each atom"""
+        return .5 * sum(self.ei[1:self.N])
     energy = energy_fromi
-    def energy_i_2(self, i, all=True):
-        # modified to find d forthe whole thing at once
+    def energy_i_2(self, i, partial=False):
+        """Return energy of atom i"""
         E = 0
         q = self.q
         boxsize = self.boxsize
+        eij = self.eij
+        atomtypes = self.atomtypes
 
         startat = 0
-        if not all:
+        if partial:
             startat = i+1
 
         q1 = q[i]
@@ -108,18 +122,19 @@ class System:
         for j in range(startat, self.N):
             if i == j:
                 continue
-            E += self.eij(0, 0, d[j])
+            E += eij(atomtypes[i], atomtypes[j], d[j])
         return E
-    def energy_i_4(self, i, all=True):
-        #print self.q[[1,101]]
+    def energy_i_4(self, i, partial=False):
+        """Return energy of atom i, using c function"""
         flags = 0
-        if all:
-            flags = 1
+        if partial:
+            flags |= SVD_ENERGYI_PARTIAL
         E = c_energy_i_4c(self.SD_p, i, flags)
         return E
-    energy_i = energy_i_4
+    energy_i = energy_i_4 # select which energ eval function to use
 
     def eij(self, i, j, dij):
+        """Energy of interaction between atomtypes i and j at distance dij"""
         if dij < 1:
             return float("inf")
         elif dij < .7:
@@ -127,19 +142,34 @@ class System:
         else:
             return 0
 
-    def trialMove(self, verbose=False):
+    def trialMove_py(self, verbose=False):
+        """Try a move using metropolis criteria"""
+
+
+
+
+
+
+
         i = int(math.floor(random.random()*self.N))
+
         qi_old = self.q[i].copy()
+
+
         Eold = self.ei[i]
 
         # v randn returns normal gaussion distributed points
         vec = numpy.random.randn(3) / 2
         self.q[i] = qi_old + vec
 
+
         Enew = self.energy_i(i)
+
         if Enew <= Eold:     # always accept, E decreases
             accept = True
         else:                # accept with prob
+
+
             x = math.exp(self.beta*(Eold-Enew))
             ran = random.random()
             if  ran < x:
@@ -148,55 +178,76 @@ class System:
                 accept = False
 
         self.ntry += 1
-        eprt = "%5.3f -> %5.3f"%(Eold, Enew)
         if accept:
+
             self.ei[i] = Enew
             self.naccept += 1
-            if verbose:
-                print "accept move", eprt, \
-                      "   ", round(self.naccept/self.ntry, 4)
+
         else:
+
             self.q[i] = qi_old
-            if verbose:
-                print "reject move", eprt, \
-                      "   ", round(self.naccept/self.ntry, 4)
-        #print "  ", "qiold:", qi_old, "qinew", self.q[i]
-        #Etotal = self.energy()
-        #if Etotal == float("inf"):
-        #    print "Etotal:", Etotal
-        #    self.display()
-        #    sys.exit(3)
+
+
+            
+        if verbose:
+            print "%6d %d, %5.3f->%5.3f accF: %.4f\n"%(
+                self.n, int(accept), Eold, Enew, self.naccept/self.ntry)
+
+
+    def trialMove_c(self, n=1, verbose=False):
+        """Try n moves using metropolis criteria, using C function"""
+        # flags: 4 = verbose
+        naccept = dragunov_c.trialMove(self.SD_p, n)
+        self.ntry += n
+        self.naccept += naccept
+        if verbose:
+            print "%10s moves"%self.ntry, round(self.naccept/self.ntry, 4)
         
+    trialMove = trialMove_c
 
     def checkContiguous(self):
+        """Check if the numpy array are contiguous, if not raise an error."""
+        # should be modified to check all arrays
         if not self.q.flags["C_CONTIGUOUS"]:
             print "*** not C contiguous!"
             raise Exception
     def checkIntersected(self):
-        all = 0
+        # self-test function (not used)
+        partial = 1
         for i in xrange(self.N):
-            E = c_energy_i_4c(self.SD_p, i, all|2)
+            E = c_energy_i_4c(self.SD_p, i, partial|2)
     def checkEnergyConsistency(self):
+        """
+        """
         E_fromall = self.energy_fromall()
         E_fromi = self.energy_fromi()
         deltaE = E_fromall - E_fromi
-        print "E difference:", repr(deltaE)
+        print "E_fromall:",E_fromall, "E_fromi",E_fromi, \
+              "E difference:", repr(deltaE)
         assert abs(E_fromall - E_fromi) < .001
     def qWrapped(self):
+        """Return coordinates wrapped to fit in boxsize"""
+        # wrapped means in interval [0, boxsize)
         q = self.q
         return numpy.mod(q, self.boxsize)
     def display(self):
+        """Update visual display of atoms"""
         q = self.qWrapped()
+        c = {0: visual.color.white,
+             1: visual.color.green,
+             }
         if not hasattr(self, "_display"):
             display = [ ]
             for i in range(self.N):
-                display.append(visual.sphere(pos=q[i], radius=.5))
+                display.append(visual.sphere(pos=q[i], radius=.5,
+                                             color=c[self.atomtypes[i]]))
             self._display = display
         else:
             display = self._display
             for i in range(self.N):
                 display[i].pos = q[i]
     def makebox(self):
+        """Put the simulation box on the visual display"""
         visual.scene.center = (5, 5, 5)
         radius = .02
         x,y,z = self.boxsize
@@ -220,8 +271,9 @@ if __name__ == "__main__":
     S = System()
     S.fill()
     if len(sys.argv) > 1 and sys.argv[1] == "timing":
-        for i in range(100000):
-            S.trialMove()
+        for i in xrange(10000):
+            S.trialMove(n=10)
+        #S.trialMove_c(100000)
         S.checkEnergyConsistency()
     elif len(sys.argv) > 1 and sys.argv[1] == "demo":
         S.makebox()
@@ -236,14 +288,15 @@ if __name__ == "__main__":
         S.checkEnergyConsistency()
     else:
         i = 0
+        S.makebox()
         while True:
-            print i,
+            #print i,
             if i%10000 == 0:
                 S.display()
-                S.checkIntersected()
+                #S.checkIntersected()
                 #time.sleep(2)
             i+= 1
-            S.trialMove(verbose=True)
+            S.trialMove(verbose=False)
             if i%1000000 == 0:
                 fo = file("output.txt", "w")
                 fo.write("title equilibrated 1A hard spheres\n")
