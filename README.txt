@@ -3,8 +3,14 @@ UT-Austin.
 
 
 
+
 GENERAL INFO
 ~~~~~~~~~~~~
+
+Look at the bottom of dragunov.py for demos on how to use it, after
+building the C module (see below).  You can type 
+`python dragunov.py demo` for a visual interactive demo, which can
+also serve as a check that everything is set up properly.
 
 
 
@@ -12,15 +18,16 @@ GENERAL INFO
 DEPENDENCIES
 ~~~~~~~~~~~~
 
-python
+python2.3 or higher.
 
-a C compiler
+a C compiler.
 
 python-ctypes.  I'm not sure what the minimum version is, but on
 debian etch I built it myself.  It wasn't hard.
 
 python-visual (debian package).  Makes it easy to display things in a
 3D interactive environment.
+
 
 
 
@@ -32,15 +39,24 @@ The following command builds the shared library
 sh build.sh -D FFid=1
 
 you must specify -D FFid=<integer> in order to select which force
-field to use.  Some force fields allow specification of another
-parameter, like -D LJsigma=<float>
+field to use.  Look in dragunov_c.c for info on what force field has
+which number.  
+
+Some force fields allow specification of another parameter, like -D
+LJsigma=<float>
+
+Some force fields will print out info on chosen
+parameters.
+
 
 
 
 FILES
 ~~~~~
 
-dragunov.py  -- Main python file.  Imports dragunov_c.so
+dragunov.py  -- Main python file.  Imports dragunov_c.so to do
+                simulations.  Look at the bottom of this file for
+                demos of how to use dragunov.
 
 dragunov_c.c -- C shared library.  This is complied via build.sh
 
