@@ -13,20 +13,28 @@
 #define SVD_ENERGYI_PARTIAL        1
 #define SVD_VERBOSE_1              2
 #define SVD_VERBOSE_2              4
-#define SVD_PAIRLIST_INCREMENTAL   8
+#define SVD_PAIRLIST_INCREMENTAL   8 //means we only updt prlst if atm mvd
+#define SVD_USE_PAIRLIST          16
+
+#define pairsRowsize 152
+#define pairsMax 150
 
 struct SimData {
   double *q;
+  double *qold;
+  double *force;
   double *boxsize;
-  int flags;
+  int flags; // not used yet... rework flag system if I start using it.
   int N;
   int Nmax;
   int ndim;
+  double dt;
   double beta;
   long *atomtypes;
   double *ei;
   long *pairlist;
   double trialMoveScale;
+  double pairlist_minDistance;
 } ;
 
 int init_mt(int seed)
@@ -35,11 +43,12 @@ int init_mt(int seed)
   return(0);
 }
 
-// #define FFid 3
+// #define FFid 3 // Don't do it here, use -D FFid=X on the command line.
 
+// Note: fij returns the force pushing particles _away_ from each other.
+//       it should basically return -(dV/dr)
 #if FFid == 1
-#include "ff/3scale-s2s.c"
-#error not done yet
+#include "ff/2scale-s2s.c"
 
 #elif FFid == 2 // this is 3 scale in uniform units
 #error not done yet
@@ -50,129 +59,15 @@ int init_mt(int seed)
 #elif FFid == 4
 #include "ff/3scale-s3s.c"
 
+#elif FFid == 5
+#include "ff/hardsphere.c"
+
+#elif FFid == 6
+#include "ff/lennardjones.c"
+
 #else
 #error No Forcefield selected!
 #endif
-
-
-/* inline double eij(int i, int j, double d) { */
-/*   int x; */
-/*   if (j<i) { x=i; i=j; j=x; } // make i the lower index */
-
-/* #define FFid 3 */
-
-/* /\* Common parameters *\/ */
-
-
-/* #if FFid == 1 */
-/* #warning Using Force Field 2-scale Stanly-1S units. */
-/* #define lambda 0.571428571428571 // 4/7 */
-/*   if (i==0 && j==0) // Jagla-Jagla */
-/*     { */
-/*       //printf("0, 0\n"); */
-/*       if(d < lambda) */
-/* 	return (1./0.); */
-/*       else if (d < 1.) */
-/* 	return (1. - d); */
-/*       /\*else if (d < 1.) */
-/* 	return (.5 - d); */
-/*       else if (d < 1.5) */
-/*       return (d - 1.5);*\/ */
-/*       else */
-/* 	return(0.0); */
-/*     } */
-/*   else if (i==0 && j==1) */
-/*     { */
-/*       //printf("0, 1\n"); */
-/*       if(d < lambda) */
-/* 	return (1./0.); */
-/*     } */
-/*   else if (i==1 && j==1) */
-/*     { */
-/*       //printf("1, 1\n"); */
-/*       if(d < lambda) */
-/* 	return (1./0.); */
-/*     } */
-/*   else */
-/*     { */
-/*       printf("unknown atom types (%d, %d), quitting.\n", i, j); */
-/*       exit(145); */
-/*     } */
-/* #elif FFid == 2 */
-/* #warning Using Force Field 3-scale Uniform units */
-/* #define lambda_S2S_1 0.581395348837209 */
-/* #define lambda_S2S_2 0.333333333333333 */
-/* #define inv_lambda_S2S_1 1.72 */
-/* #define inv_lambda_S2S_2 3. */
-/*   if (i==0 && j==0) // Jagla-Jagla */
-/*     { */
-/*       if(d < 1.) */
-/* 	return (1./0.); */
-/*       else if (d < inv_lambda_S2S_1) */
-/* 	return (   1/(inv_lambda_S2S_1 -1.  )  *d    + */
-/* 		3.5/(4.5*(1-lambda_S2S_1))); */
-
-/*       else if (d < inv_lambda_S2S_2) */
-/* 	return ( -1./(4.5*(1-lambda_S2S_2)* */
-/* 		     (inv_lambda_S2S_1-inv_lambda_S2S_2)) */
-/* 		 * ( d-3. )); */
-/*       else */
-/* 	return(0.0); */
-/*     } */
-/*   else if (i==0 && j==1) */
-/*     { */
-/*       //printf("0, 1\n"); */
-/*       if(d < 1) */
-/* 	return (1./0.); */
-/*     } */
-/*   else if (i==1 && j==1) */
-/*     { */
-/*       //printf("1, 1\n"); */
-/*       if(d < 1) */
-/* 	return (1./0.); */
-/*     } */
-/*   else */
-/*     { */
-/*       printf("unknown atom types (%d, %d), quitting.\n", i, j); */
-/*       exit(145); */
-/*     } */
-/* #elif FFid == 3 */
-/* #warning Using 3-scale model with S-2S units. */
-/* #define lambda 0.581395348837209  // 1/1.72 */
-/* // gnuplot> plot [0:1.74] (-1/(4.5*(1-3*l)) * x + 3*l/(4.5*(1-3*l))), (1-x)-1/4.5, -1/4.5, 0  */
-/*   if (i==0 && j==0) // Jagla-Jagla */
-/*     { */
-/*       if(d < lambda) */
-/* 	return (1./0.); */
-/*       else if (d < 1.) */
-/* 	return (1. - d) - 1./(4.5); */
-/*       else if (d < 3.*lambda) */
-/* 	return (-1./(4.5*(1-3*lambda))*d + 3*lambda/(4.5*(1-3*lambda)) ); */
-/*       else */
-/* 	return(0.0); */
-/*     } */
-/*   else if (i==0 && j==1) */
-/*     { */
-/*       if(d < lambda) */
-/* 	return (1./0.); */
-/*     } */
-/*   else if (i==1 && j==1) */
-/*     { */
-/*       if(d < lambda) */
-/* 	return (1./0.); */
-/*     } */
-/*   else */
-/*     { */
-/*       printf("unknown atom types (%d, %d), quitting.\n", i, j); */
-/*       exit(145); */
-/*     } */
-/* #else */
-/* #error No Forcefield defined! */
-/* #endif */
-/*   return(0.0); // we shouldn't get here. */
-/* } */
-
-
 
 inline double distance(double *q, double *boxsize, int i, int j) {
   double d=0;
@@ -192,8 +87,6 @@ inline double distance(double *q, double *boxsize, int i, int j) {
   return (sqrt(d));
 }
 
-#define pairsRowsize 102
-#define pairsMax 100
 double energy_i(struct SimData *SD,
 		   int i,
 		   int flags
@@ -207,12 +100,13 @@ double energy_i(struct SimData *SD,
   long *atomtypes = SD->atomtypes;
   q = SD->q;
   boxsize = SD->boxsize;
-  int usePairlist=0;
+  int usePairlist = flags & SVD_USE_PAIRLIST;
   partial = flags & SVD_ENERGYI_PARTIAL; // defaults to 
   if (partial) j=i+1;
 
 
   if (usePairlist) {
+    //printf("using pairlist in energy_i\n");
     int ni = SD->pairlist[i*pairsRowsize];
     for (ni -= 1;  ni>=0;  ni-- ) {
       j = SD->pairlist[i*pairsRowsize + 2 + ni];
@@ -232,7 +126,31 @@ double energy_i(struct SimData *SD,
   //printf("E = %f\n", E);
   return(E) ;
 }
+double energy(struct SimData *SD,
+	      int flags) {
+  double E=0;
+  int i;
+  flags |= SVD_ENERGYI_PARTIAL ;
 
+  for(i=0;  i < SD->N;  i++) {
+    E += energy_i(SD, i, flags);
+  }
+  return (E);
+}
+
+
+inline void force_ij(int i, int j,    // atomtypes
+	     double d,        // distance between atoms
+	     double *r,       // x, y, z coordinates
+	     double *force) { // forces placed in here
+  double F;
+  F = fij(i, j, d);
+
+  force[0] = F * r[0]/d;
+  force[1] = F * r[1]/d;
+  force[2] = F * r[2]/d;
+  
+}
 
 double forcedotr_i(struct SimData *SD,
 		   int i,
@@ -252,11 +170,10 @@ double forcedotr_i(struct SimData *SD,
   //printf("%f %f %f\n", qi0, qi1, qi2);
   for (; j<SD->N ; j++ ) {
     //printf("%d %d\n", i, j);
-    double drx, dry, drz;
+    double drx, dry, drz;   // vectors FROM i TO j, makes force FROM i ON j
     double d;
     if (i == j) continue;
     d = 0;
-    double rij[3];
 
     drx = SD->q[j*3  ] - qi0 ;
     drx -= floor((drx/SD->boxsize[0] + .5) ) * SD->boxsize[0];
@@ -274,10 +191,11 @@ double forcedotr_i(struct SimData *SD,
     //if (d>1) return(0);  // greater than cutoff^2
 
     d = sqrt(d);
-    double force[3];
-    rij[0] = drx;   rij[1] = dry;   rij[2] = drz;
-    fij(SD->atomtypes[i], SD->atomtypes[j], d, rij, force);
-    fdotr += drx*force[0] + dry*force[1] + drx*force[2];
+
+    double F;
+    F = fij(SD->atomtypes[i], SD->atomtypes[j], d);
+    //fdotr += drx*(F*drx/d)  +  dry*(F*dry/d)  +  drz*(F*drz/d);
+    fdotr += F * d ;
 
     if (flags&SVD_VERBOSE_1) {
       CHECK;
@@ -289,7 +207,155 @@ double forcedotr_i(struct SimData *SD,
 }
 
 
-int trialMove(struct SimData *SD, int n) {
+
+double calcForce(struct SimData *SD, int flags) {
+  // defaults to using all of them
+  int i, j;
+
+  double *F = SD->force;
+  memset(F, 0, SD->N*3*sizeof(double));
+
+  //printf("%f %f %f\n", qi0, qi1, qi2);
+  for (i=0; i<(SD->N-1) ; i++ ) {
+
+    double qi0 = SD->q[i*3  ];
+    double qi1 = SD->q[i*3+1];
+    double qi2 = SD->q[i*3+2];
+    for (j=i+1; j<SD->N ; j++ ) {
+      //printf("%d %d\n", i, j);
+      double drx, dry, drz;   // vectors FROM i TO j, makes force FROM i ON j
+      double d;
+      if (i == j) printf("we should'nt be here raockhorke\n");
+      d = 0;
+  
+      drx = SD->q[j*3  ] - qi0 ;
+      drx -= floor((drx/SD->boxsize[0] + .5) ) * SD->boxsize[0];
+      d += drx*drx;
+      //if (d>1) return(0);  // greater than cutoff^2
+  
+      dry = SD->q[j*3+1] - qi1 ;
+      dry -= floor((dry/SD->boxsize[1] + .5) ) * SD->boxsize[1];
+      d += dry*dry;
+      //if (d>1) return(0);  // greater than cutoff^2
+  
+      drz = SD->q[j*3+2] - qi2 ;
+      drz -= floor((drz/SD->boxsize[2] + .5) ) * SD->boxsize[2];
+      d += drz*drz;
+      //if (d>1) return(0);  // greater than cutoff^2
+
+      d = sqrt(d);
+      /*if (d < .25) {
+	printf("%f \n", d);
+	}*/
+  
+      double Fk[3], rk[3];
+      double Fij;
+      rk[0] = drx;
+      rk[1] = dry;
+      rk[2] = drz;
+      /*force_ij(SD->atomtypes[i], SD->atomtypes[j], d, 
+	       rk,
+	       Fk);*/
+      Fij = fij(SD->atomtypes[i], SD->atomtypes[j], d);
+      Fk[0] = Fij * rk[0]/d;
+      Fk[1] = Fij * rk[1]/d;
+      Fk[2] = Fij * rk[2]/d;
+      if (Fij > 10. ) {
+	printf("%d, %d, %f, %f, %f %f %f \n", 
+	         i,  j,  d, Fij, Fk[0], Fk[1], Fk[2]);
+      }
+
+      F[i*3  ] -= Fk[0];
+      F[i*3+1] -= Fk[1];
+      F[i*3+2] -= Fk[2];
+      F[j*3  ] += Fk[0];
+      F[j*3+1] += Fk[1];
+      F[j*3+2] += Fk[2];
+      //F = fij(SD->atomtypes[i], SD->atomtypes[j], d);
+      
+      
+      //fdotr += drx*(F*drx/d)  +  dry*(F*dry/d)  +  drz*(F*drz/d);
+    }
+  }
+  
+  //printf("E = %f\n", E);
+  return(0);
+}
+
+double integrate(struct SimData *SD, int flags) {
+  // integrate to the next time step, return the KE.
+  double *q, *qold, *force;
+
+  q = SD->q ;
+  qold = SD->qold;
+  force = SD->force;
+  double mass = 1.;
+  double qnew;
+  double dt = SD->dt;
+  double dt2 = dt*dt;  // delta time squared
+  double v, KE = 0;
+
+  int i;
+  for(i=0;  i < (SD->N)*3;  i++) {
+/*     v2 = 0; */
+/*     for (k=0; k<3; k++) { */
+      qnew = 2*q[i] - qold[i] + force[i]*dt2/mass;
+      //qnew = 2* (*q)     - (*qold) + (*force)*dt2/mass;
+
+      v = (qnew - qold[i])/(2*dt);
+      //v = (qnew - (*qold))/(2*dt);
+
+      //v = (qnew - q[i*3+k])/(dt);
+      //v = (qnew - (*q))/(dt);
+      //v2 += v * v ;
+
+      KE += .5 * mass * v * v;
+      
+      qold[i] = q[i];
+      q[i] = qnew;
+      //(*qold) = (*q);
+      //(*q) = qnew;
+      //q++; qold++; force++;
+/*     /} */
+    
+/*     KE += .5 * mass * v2; */
+  }
+  return(KE);
+}
+
+double mdStep(struct SimData *SD, int n, int flags) {
+  int count ;
+  double KE = 0 ;
+  for (count=0; count<n; count++) {
+    calcForce(SD, flags);
+    KE = integrate(SD, flags);
+  }  
+  return(KE);
+}
+
+double kineticEnergy(struct SimData *SD) {
+  double KE = 0;
+  
+  int i;
+  for (i=0;  i < (SD->N)*3;  i++) {
+    KE += 1;
+  }
+  return(KE);
+}
+
+/* double forcedotr_term(double *qi, int i, int j, int *atomtypes) { */
+/* } */
+
+double pressure_c(struct SimData *SD, int flags) {
+  flags |= SVD_ENERGYI_PARTIAL;
+  //  double fdotr = 0;
+
+  
+  return(-1);
+}
+
+
+int trialMove(struct SimData *SD, int n, int flags) {
   /* Run N monte carlo trial moves, return number of moves accepted */
   double qi_old[3];
   double Eold, Enew;
@@ -301,7 +367,7 @@ int trialMove(struct SimData *SD, int n) {
     qi_old[1] = SD->q[i*3+1];
     qi_old[2] = SD->q[i*3+2];
     //Eold = SD->ei[i];   // ei[i] not updated if something else moves closer
-    Eold = energy_i(SD, i, 0);
+    Eold = energy_i(SD, i, flags);
 
     // v randn returns normal gaussion distributed points
     //#define trialmovescale .15
@@ -310,7 +376,7 @@ int trialMove(struct SimData *SD, int n) {
     SD->q[i*3+1] += trialmovescale*(genrand_real1() - .5) ;
     SD->q[i*3+2] += trialmovescale*(genrand_real1() - .5) ;
 
-    Enew = energy_i(SD, i, 0);
+    Enew = energy_i(SD, i, flags);
     if (Enew <= Eold)     /* always accept, E decreases */
       accept = 1;
     else if (Enew == 1./0.) {
@@ -344,21 +410,25 @@ int trialMove(struct SimData *SD, int n) {
   return(naccept);
 }
 
-int pairlist_init(struct SimData *SD, double cutoff, int flags) {
+int pairlistInit(struct SimData *SD, double cutoff, int flags) {
   // SD->pairlist is a (natoms, pairsRowsize) array, capable of holding up to 15 pairs
   // - The first element in the row is for number of pairs
   // - second element is for number of moves that atom has done since
   //   the pairlist was created (not used yet)
-  long i, j;
+  // - remainder of the rows are for the pairlist pairs
+
+  int i, j; // should be long ??
   long *pairlist=SD->pairlist;
 
-  if (! (flags&SVD_PAIRLIST_INCREMENTAL)) {
+  int incremental = flags&SVD_PAIRLIST_INCREMENTAL;
+
+  if (! incremental ) {
     memset(pairlist, '\0', sizeof(long)*pairsRowsize*(SD->Nmax));
   }
 
   for (i=0; i<SD->N; i++) {
-    //printf("i_pl_i: %ld\n", i);
-    if (flags&SVD_PAIRLIST_INCREMENTAL) {
+    //printf("i_pl_i: %d\n", i);
+    if ( incremental ) {
       if (pairlist[i*pairsRowsize+1] == 0) {
 	// atom hasn't moved, don't regenerate it
 	continue;
@@ -368,8 +438,6 @@ int pairlist_init(struct SimData *SD, double cutoff, int flags) {
 	memset(pairlist+(i*pairsRowsize), '\0', sizeof(long)*pairsRowsize);
       }
       j = 0;
-    }
-    else {
     }
     j=i+1;
     for (; j<SD->N; j++) {
@@ -382,12 +450,12 @@ int pairlist_init(struct SimData *SD, double cutoff, int flags) {
 	//       i, j, d);
 	int ni = pairlist[i*pairsRowsize];
 	if ( ni >= pairsMax) {  
-	  printf("Pairlist overfull for %ld.\n", i);
+	  printf("Pairlist overfull for %d.\n", i);
 	  exit(5);
 	}
 	int nj = pairlist[j*pairsRowsize];
 	if (nj == pairsMax) {  
-	  printf("Pairlist overfull for %ld.\n", j);
+	  printf("Pairlist overfull for %d.\n", j);
 	  exit(5);
 	}
 		     
@@ -401,28 +469,49 @@ int pairlist_init(struct SimData *SD, double cutoff, int flags) {
   return(0);
 }
 
-int pairlist_check(struct SimData *SD, double warn, int flags) {
+int pairlistCheck(struct SimData *SD, double warn, int flags) {
   // SD->pairlist is a (natoms, pairsRowsize) array, capable of holding up to 15 pairs
   // - The first element in the row is for number of pairs
   // - second element is for number of moves that atom has done since
   //   the pairlist was created (not used yet)
   long *pairlist=SD->pairlist;
-  long int i, count1;
+  int i, j, count1;
   int nviolations=0;
+  double minDistance = 1e6 ;
   
-  for (i=0;  i<SD->N;  i++) {
-    for (count1=0;  count1<pairlist[pairsRowsize*i];  count1++) {
+  for (i=0; i<SD->N; i++) {
+    j=i+1;
+    for (; j<SD->N; j++) {
       double d;
-      d = distance(SD->q, SD->boxsize, 
-		   i, pairlist[pairsRowsize*i + 2 + count1]);
-      if (d>warn) {
-	long int j = pairlist[pairsRowsize*i + 2 + count1];
-	printf("  Pairlist violation atoms %ld(%ld moves), %ld(%ld moves)\n", 
-	       i, pairlist[i*pairsRowsize+1], 
-	       j, pairlist[j*pairsRowsize+1]);
-	nviolations++;
+      if (i==j) continue;
+      d = distance(SD->q, SD->boxsize, i, j);
+      //printf("d: %f\n", d);
+      if (d <= warn) {
+	int foundInPairlist;
+
+	// search for i in j's list:
+	int ni = pairlist[i*pairsRowsize];
+
+	foundInPairlist = 0;
+	for (count1=0; count1<ni ; count1++) {
+	  if (pairlist[i*pairsRowsize + 2 + count1] == j)
+	    {
+	      foundInPairlist = 1;
+	      break;
+	    }
+	}
+	if (! foundInPairlist) {
+	  printf("Atom %d should be in atom %d's pairlist, but isn't (d=%f).\n",
+		 j, i, d);
+	  // We want to record the closest distance of all atoms that were
+	  // not in the original pairlist.
+	  if (d < minDistance) { // store the closest approach for an 
+	    minDistance = d;     //   adaptive pairlist cutoff algorithm
+	  }
+	}
       }
     }
   }
+  SD->pairlist_minDistance = minDistance;
   return(nviolations);
 }

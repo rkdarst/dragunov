@@ -21,57 +21,86 @@ import cliargs
 time.sleep(0)  # prevent an "imported module not used" error
 
 
-SVD_ENERGYI_PARTIAL       = 1
-SVD_VERBOSE_1             = 2
-SVD_VERBOSE_2             = 4
-SVD_PAIRLIST_INCREMENTAL  = 8
+SVD_ENERGYI_PARTIAL       =   1
+SVD_VERBOSE_1             =   2
+SVD_VERBOSE_2             =   4
+SVD_PAIRLIST_INCREMENTAL  =   8
+SVD_USE_PAIRLIST          =  16
 
 
 class SimData(ctypes.Structure):
     _fields_ = [("q", ctypes.c_void_p),
+                ("qold", ctypes.c_void_p),
+                ("force", ctypes.c_void_p),
                 ("boxsize", ctypes.c_void_p),
                 ("flags", ctypes.c_int),
                 ("N", ctypes.c_int),
                 ("Nmax", ctypes.c_int),
                 ("ndim", ctypes.c_int),
+                ("dt", ctypes.c_double),
                 ("beta", ctypes.c_double),
                 ("atomtypes", ctypes.c_void_p),
                 ("ei", ctypes.c_void_p),
                 ("pairlist", ctypes.c_void_p),
                 ("trialMoveScale", ctypes.c_double),
+                ("pairlist_minDistance", ctypes.c_double),
                 ]
 SimData_p = ctypes.POINTER(SimData)
 
 dragunov_c = numpy.ctypeslib.load_library('dragunov_c', '.')
+
+c_eij = dragunov_c.eij
 dragunov_c.eij.restype = ctypes.c_double
 dragunov_c.eij.argtypes = (ctypes.c_int,
                            ctypes.c_int,
                            ctypes.c_double, )
-dragunov_c.energy_i.restype = ctypes.c_double
-dragunov_c.energy_i.argtypes = (SimData_p,       # qdata_p
-                                ctypes.c_int,    # i
-                                ctypes.c_int)    # flags
-dragunov_c.trialMove.restype = ctypes.c_int
-dragunov_c.trialMove.argtypes = (SimData_p,       # qdata_p
-                                 ctypes.c_int)    # n, number of moves
-dragunov_c.forcedotr_i.restype = ctypes.c_double
-dragunov_c.forcedotr_i.argtypes = (SimData_p,       # qdata_p
-                                   ctypes.c_int,    # i
-                                   ctypes.c_int)    # flags
-c_pairlist_init = dragunov_c.pairlist_init
-c_pairlist_init.restype = ctypes.c_int
-c_pairlist_init.argtypes = (SimData_p,       # SimData_p
-                            ctypes.c_double, # cutoff
-                            ctypes.c_int)    # flags
-c_pairlist_check = dragunov_c.pairlist_check
-c_pairlist_check.restype = ctypes.c_int
-c_pairlist_check.argtypes = (SimData_p,       # SimData_p
-                             ctypes.c_double, # warn
-                             ctypes.c_int)    # flags
 
-c_eij = dragunov_c.eij
 c_energy_i = dragunov_c.energy_i
+c_energy_i.restype = ctypes.c_double
+c_energy_i.argtypes = (SimData_p,       # qdata_p
+                       ctypes.c_int,    # i
+                       ctypes.c_int)    # flags
+
+c_energy = dragunov_c.energy
+c_energy.restype = ctypes.c_double
+c_energy.argtypes = (SimData_p,       # qdata_p
+                     ctypes.c_int)    # flags
+
+c_integrate = dragunov_c.integrate
+c_integrate.restype = ctypes.c_double
+c_integrate.argtypes = (SimData_p,       # qdata_p
+                        ctypes.c_int)    # flags
+
+c_mdStep = dragunov_c.mdStep
+c_mdStep.restype = ctypes.c_double
+c_mdStep.argtypes = (SimData_p,       # qdata_p
+                     ctypes.c_int,    # n, number of moves
+                     ctypes.c_int)    # flags
+
+c_trialMove = dragunov_c.trialMove
+c_trialMove.restype = ctypes.c_int
+c_trialMove.argtypes = (SimData_p,       # qdata_p
+                        ctypes.c_int,    # n, number of moves
+                        ctypes.c_int)    # flags
+
 c_forcedotr_i = dragunov_c.forcedotr_i
+c_forcedotr_i.restype = ctypes.c_double
+c_forcedotr_i.argtypes = (SimData_p,       # qdata_p
+                          ctypes.c_int,    # i
+                          ctypes.c_int)    # flags
+
+c_pairlistInit = dragunov_c.pairlistInit
+c_pairlistInit.restype = ctypes.c_int
+c_pairlistInit.argtypes = (SimData_p,       # SimData_p
+                           ctypes.c_double, # cutoff
+                           ctypes.c_int)    # flags
+
+c_pairlistCheck = dragunov_c.pairlistCheck
+c_pairlistCheck.restype = ctypes.c_int
+c_pairlistCheck.argtypes = (SimData_p,       # SimData_p
+                            ctypes.c_double, # warn
+                            ctypes.c_int)    # flags
+
 
 dragunov_c.init_gen_rand.restype = None
 dragunov_c.init_mt(10)
@@ -81,15 +110,28 @@ class System(object):
         return numpy.product(self.boxsize)
     volume = property(fget=_volume_get)
 
+    def _density_get(self):
+        return self.N / numpy.product(self.boxsize)
+    density = property(fget=_density_get)
+
+    def _temperature_get(self):
+        return 1 / self.beta
+    T = property(fget=_temperature_get)
+
     def __init__(self, N, beta=1., Nmax=None, boxsize=(10,10,10),
-                 trialMoveScale=1):
+                 trialMoveScale=1,
+                 pressureTarget=None,
+                 dt=.01):
         if Nmax == None:
             Nmax = N+50
         SD =      self.SD = SimData()
         self.SD_p = ctypes.pointer(SD)
         SD.N    =   self.N    =   N
         SD.Nmax =   self.Nmax =   Nmax
+        SD.dt =     self.dt   =   dt
         SD.beta =   self.beta =   beta
+        self.pressureTarget = pressureTarget
+        self.sizeScalar = 1.
         SD.trialMoveScale = self.trialMoveScale = trialMoveScale
         self.mu_dict = { }
         self._pressureList = [ ]
@@ -99,15 +141,25 @@ class System(object):
 
         self.q = numpy.zeros(shape=(self.Nmax, 3), dtype=numpy.float)
         SD.q   = self.q.ctypes.data
+        self.qold = numpy.zeros(shape=(self.Nmax, 3), dtype=numpy.float)
+        SD.qold   = self.qold.ctypes.data
+        self.force = numpy.zeros(shape=(self.Nmax, 3), dtype=numpy.float)
+        SD.force   = self.force.ctypes.data
         self.ei = numpy.zeros(shape=(self.Nmax, ), dtype=numpy.float)
         SD.ei   = self.ei.ctypes.data
-        self.pairlist = numpy.zeros(shape=(self.Nmax, 102), dtype=numpy.int_)
+        self.pairlist = numpy.zeros(shape=(self.Nmax, 152), dtype=numpy.int_)
         SD.pairlist   = self.pairlist.ctypes.data
         self.boxsize = numpy.asarray(boxsize, dtype=numpy.float)
         SD.boxsize   = self.boxsize.ctypes.data
         self.atomtypes = numpy.zeros(shape=(self.Nmax), dtype=numpy.int_)
         SD.atomtypes   = self.atomtypes.ctypes.data
         self.atomtypes[0:self.N] = 0   # default to zero
+
+        self.flags = 0
+
+    def resetStatistics(self):
+        self._pressureList = [ ]
+
 
     def acceptRatio(self):
         return self.naccept / self.ntry
@@ -132,11 +184,8 @@ class System(object):
         for i in range(self.N):
             newpos = numpy.random.uniform(size=(3,)) * self.boxsize
             self.q[i] = newpos
-
-    def density(self):
-        volume = numpy.product(self.boxsize)
-        return self.N / volume
-
+    def zeroVelocity(self):
+        self.qold[:] = self.q[:]
     def eij(self, i, j, dij):
         """Energy of interaction between atomtypes i and j at distance dij"""
         if j<i:   j,i = i,j  # make i the lower index
@@ -167,10 +216,13 @@ class System(object):
 
     def energy_fromall(self):
         """Return total energy by evaluating energy for all atoms"""
-        E = 0
-        for i in range(self.N):
-            E+= self.energy_i(i, partial=True)
-        return E
+        #E = 0
+        #for i in range(self.N):
+        #    E += c_energy_i(self.SD_p, i, SVD_ENERGYI_PARTIAL)
+        #    #E+= self.energy_i(i, partial=True)
+        #return E
+        return c_energy(self.SD_p, 0)
+
     def energy_fromi(self):
         """Return total energy by using sum of cached values for each atom"""
         raise Exception("this doesn't work")
@@ -200,52 +252,64 @@ class System(object):
         return E
     def energy_i_c(self, i, partial=False):
         """Return energy of atom i, using c function"""
-        flags = 0
+        flags = self.flags
         if partial:
-            flags |= SVD_ENERGYI_PARTIAL
+            flags = flags | SVD_ENERGYI_PARTIAL
         E = c_energy_i(self.SD_p, i, flags)
         return E
     energy_i = energy_i_c # select which energ eval function to use
 
-    def pressure_i_py(self, i, partial=False):
-        """Return energy of atom i"""
-        fdotr = 0
-        q = self.q
-        boxsize = self.boxsize
-        #atomtypes = self.atomtypes
-
-        startat = 0
-        if partial:
-            startat = i+1
-
-        q1 = q[i]
-        d = q - q1
-        d = numpy.abs(d - (numpy.floor(d/boxsize + .5)) * boxsize)
-        d = numpy.sqrt((d*d).sum(axis=1))  # distances from i to j
-
-        for j in range(startat, self.N):
-            if i == j:
-                continue
-            #fdotr += fij(atomtypes[i], atomtypes[j], d[j])
-            # XXX
-        return fdotr
-    def pressure_c(self):
-        flags = 0
-        flags |= SVD_ENERGYI_PARTIAL
+    ##  def pressure_i_py(self, i, partial=False):
+    ##      """Return energy of atom i"""
+    ##      fdotr = 0
+    ##      q = self.q
+    ##      boxsize = self.boxsize
+    ##      #atomtypes = self.atomtypes
+    ##  
+    ##      startat = 0
+    ##      if partial:
+    ##          startat = i+1
+    ##  
+    ##      q1 = q[i]
+    ##      d = q - q1
+    ##      d = numpy.abs(d - (numpy.floor(d/boxsize + .5)) * boxsize)
+    ##      d = numpy.sqrt((d*d).sum(axis=1))  # distances from i to j
+    ##  
+    ##      for j in range(startat, self.N):
+    ##          if i == j:
+    ##              continue
+    ##          #fdotr += fij(atomtypes[i], atomtypes[j], d[j])e
+    ##          # XXX
+    ##      return fdotr
+    def pressure_c(self, add=False):
+        flags = self.flags
+        flags = flags | SVD_ENERGYI_PARTIAL
         fdotr = 0
         
         for i in range(0, self.N-1):
             fdotr += c_forcedotr_i(self.SD_p, i, flags)
-        volume = numpy.product(self.boxsize)
-        rho = self.N / volume
+        volume = self.volume
+        density = self.density
         dimensions = 3
-        
-        pressure = rho/self.beta  +  fdotr / (dimensions * volume)
+                 # v-- should be "+" for LJ correct results
+                 # v-- this also makes pressure increase with
+                 #     increasing density for S2S- 2s units
+        pressure = + fdotr / (dimensions * volume)
+        if add:
+            pressure += density/self.beta
         self._pressureList.append(pressure)
         return pressure
     pressure = pressure_c
     def pressureAverage(self):
         return sum(self._pressureList)/len(self._pressureList)
+    def pressureTrialMove(self):
+        # get current pressure
+        # trial boxsize change
+        # - our current size-scalar is L
+        # - we need to make a reversible random move,
+        #   (random number .9 to 1 and .5 chance of inverting?)
+        #
+        pass
 
     def trialMove_py(self, verbose=False):
         """Try a move using metropolis criteria"""
@@ -259,7 +323,7 @@ class System(object):
 
 
         #Eold = self.ei[i] # ei[i] not updated if something else moves closer
-        Eold = self.energy_i(i) 
+        Eold = self.energy_i(i)
 
         # v randn returns normal gaussion distributed points
         vec = numpy.random.randn(3) / 2
@@ -295,7 +359,7 @@ class System(object):
     def trialMove_c(self, n=1, verbose=False):
         """Try n moves using metropolis criteria, using C function"""
         # flags: 4 = verbose
-        naccept = dragunov_c.trialMove(self.SD_p, n)
+        naccept = c_trialMove(self.SD_p, n, self.flags)
         self.ntry += n
         self.ntry_last = n
         self.naccept += naccept
@@ -315,6 +379,7 @@ class System(object):
         newpos = numpy.random.uniform(size=(3,)) * self.boxsize
         newi = self.addAtom(newpos, type=type)
         Eadded = self.energy_i(newi)
+        #print Eadded, self.beta
         self.mu_dict.setdefault(type, []).append(math.exp(-Eadded*self.beta))
         self.delAtom(newi)
         
@@ -322,20 +387,30 @@ class System(object):
         """
         """
         volume = numpy.product(self.boxsize)
+        avg = sum(self.mu_dict[type]) / len(self.mu_dict[type])
+        #print self.mu_dict[type]
+        if avg == 0:
+            return 0  # this is technically incorrect, but we need to return
+                      # something that won't make parse errors
         # constant related to the deBroglie wavelength
         # the constant should also be adjusted for number of dimensions
         constant = 3./self.beta
 
-        avg = sum(self.mu_dict[type]) / len(self.mu_dict[type])
         mu = -math.log(volume*avg/(self.N+1))/self.beta + constant
         return mu
+        # 
 
         # constant related to the deBroglie wavelength
         # the constant should also be adjusted for number of dimensions
-        #thermWavelength3 = 1.**3.
-        mu_ig = -math.log(avg)/self.beta
+        #thermWavelength3 = 1.**1.5
+        thermWavelength3 = 1.
+        mu_ig = -math.log(volume*thermWavelength3/(self.N+1))/self.beta
         mu_excess = -math.log(avg)/self.beta
         return mu_ig + mu_excess
+    def widomInsertCorrection1(self):
+        # _add_ this to the reported mu tocorrect the mu.
+        constant = 3./self.beta
+        return math.log(self.volume/(self.N+1))/self.beta - constant
     
     mu = widomInsertResults
     def addAtom(self, pos, type):
@@ -378,16 +453,18 @@ class System(object):
         print "E_fromall:",E_fromall, "E_fromi",E_fromi, \
               "E difference:", repr(deltaE)
         assert abs(E_fromall - E_fromi) < .001
-    def pairlist_init(self, cutoff=2, flags=0):
-        return c_pairlist_init(self.SD_p, cutoff, flags)
+    def pairlistInit(self, cutoff):
+        flags = self.flags
+        return c_pairlistInit(self.SD_p, cutoff, flags)
         
-    def pairlist_check(self, warn=3, strict=True):
-        nviolations = c_pairlist_check(self.SD_p, warn, 0)
+    def pairlistCheck(self, warn, strict=True):
+        nviolations = c_pairlistCheck(self.SD_p, warn, self.flags)
         if nviolations:
             print "nviolatios:", nviolations, "at step", self.ntry
         if strict:
             assert nviolations == 0
-    def removeOverlaps(self):
+        #print self.SD.pairlist_minDistance
+    def removeOverlaps(self, Emax=float('inf')):
         """Remove overlaps of atoms (make energy non-infinite)
 
         Iterates through all atoms, and for each one with infinite
@@ -396,10 +473,13 @@ class System(object):
         """
         for i in range(self.N):
             Eold = self.energy_i(i)
-            if Eold != float('inf'):
+            #if Eold != float('inf'):
+            #if Eold >= Emax:
+            #    print Eold, "E too high"
+            if Eold < Emax:
                 # skip atoms that already have finite energy
                 continue
-            while Eold == float('inf'):
+            while Eold >= Emax:
                 # until it has finite energy, give it a random displacement.
                 # (this is a normal displacement, so may not be the
                 #  most efficient)
@@ -514,14 +594,18 @@ def readUghfile(filename):
         
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "timing":
-        S = System(N=1000, trialMoveScale=.15)
-        S.fill()
-        S.pairlist_init()
+        disp = False
+        S = System(N=600, trialMoveScale=.25)
+        S.flags |= SVD_USE_PAIRLIST
+        S.fillRandom()
+        S.removeOverlaps()
+        disp and S.makebox()
         for i in xrange(100):
-            print i
+            S.pairlistInit(2.5)
+            disp and S.display()
+            print i,
             S.trialMove(n=1000)
-            #S.pairlist_check()
-            S.pairlist_init(flags=0) #SVD_PAIRLIST_INCREMENTAL)
+            S.pairlistCheck(1.5)
         print S.pairlist
         #S.trialMove_c(100000)
         #S.checkEnergyConsistency()
@@ -531,11 +615,11 @@ if __name__ == "__main__":
         S.makebox()
         i = 0
         while True:
-            S.display()
             S.trialMove()
             #S.checkEnergyConsistency()
             if i%100 == 0:
-                print "\r%9d"%i,
+                S.display()
+                print "\r%9d"%i, S.energy(), S.pressure()
                 sys.stdout.flush()
             i += 1
     elif len(sys.argv) > 1 and sys.argv[1] == "exp1":
@@ -553,7 +637,7 @@ if __name__ == "__main__":
         series = "2scale/"
         #name = "test"
         #S.fill(10, 10, 10, scale=1.72)
-        S.fill_random() 
+        S.fillRandom() 
         S.removeOverlaps()
         disp and S.makebox()
         disp and S.display()
@@ -640,39 +724,43 @@ if __name__ == "__main__":
                 log.flush()
         S.writeUghfile("ugh/equilbrated-%s.ugh"%N)
     else:
-        S = System(N=1000, beta=.75)
-        S.fill()
+        skip = 1
+        S = System(N=200, beta=1/2.0,
+                   boxsize=(10,10,10), trialMoveScale=.25,
+                   dt=.001)
+        pairlist = False
+        if pairlist: S.flags |= SVD_USE_PAIRLIST
+        S.fillRandom()
+        #S.fill()
+        S.removeOverlaps(10.)
+        S.zeroVelocity()
         #S.atomtypes[numpy.asarray((numpy.random.uniform(1500, size=500)),
         #                          dtype=int)] = 1
-        #S.pairlist_init()
+        #S.pairlistInit()
         i = 0
         S.makebox()
         S.display()
+        #time.sleep(5)
         logfile = file("logfile.txt", "w")
-        S.removeOverlaps()
-        logfile=sys.stdout
+        #logfile=sys.stdout
+        print >> logfile, "# i, T, rho, E, P, P_avg"
         while True:
-            #print i
-            if i%10000 == 0:
-                #S.display()
-                #S.checkIntersected()
-                #time.sleep(2)
-                pass
-            i += 1
-            S.trialMove(verbose=False, n=1000)
-            S.widomInsert()
+            if pairlist: S.pairlistInit(3.25)
+            i += skip
+            if i == 150000:
+                S.resetStatistics()
+            #S.trialMove(verbose=False, n=skip)
+
+            ke = c_mdStep(S.SD_p, skip, 0)
+            if pairlist: S.pairlistCheck(2.75)
+            #S.widomInsert()
             S.display()
+            print >> logfile, i, S.T, S.density, S.energy(), \
+                  S.pressure(add=True), S.pressureAverage(), ke
             #print S.pairlist
-            #S.pairlist_check(strict=False)
-            print >> logfile, i, S.energy(), S.widomInsertResults() #S.pressure()
-            if i%1000000 == 0:
-                fo = file("ugh/output.txt", "w")
-                fo.write("title equilibrated 1A hard spheres\n")
-                fo.write("natoms 250\n")
-                fo.write("boxsize 10 10 10\n")
-                fo.write("step %s\n"%i)
-                fo.write("data\n")
-                for j in range(S.N):
-                    fo.write("%r %r %r\n"%tuple(S.q[j]))
-                del fo
+            #S.pairlistCheck(strict=False)
+            logfile.flush()
+            #time.sleep(.5)
+            print
+
     #time.sleep(10)
