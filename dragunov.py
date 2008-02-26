@@ -40,7 +40,7 @@ class SimData(ctypes.Structure):
                 ("dt", ctypes.c_double),
                 ("beta", ctypes.c_double),
                 ("atomtypes", ctypes.c_void_p),
-                ("ei", ctypes.c_void_p),
+                #("ei", ctypes.c_void_p),
                 ("pairlist", ctypes.c_void_p),
                 ("trialMoveScale", ctypes.c_double),
                 ("pairlist_minDistance", ctypes.c_double),
@@ -151,8 +151,8 @@ class System(object):
         SD.qold   = self.qold.ctypes.data
         self.force = numpy.zeros(shape=(self.Nmax, 3), dtype=numpy.float)
         SD.force   = self.force.ctypes.data
-        self.ei = numpy.zeros(shape=(self.Nmax, ), dtype=numpy.float)
-        SD.ei   = self.ei.ctypes.data
+        #self.ei = numpy.zeros(shape=(self.Nmax, ), dtype=numpy.float)
+        #SD.ei   = self.ei.ctypes.data
         self.pairlist = numpy.zeros(shape=(self.Nmax, 152), dtype=numpy.int_)
         SD.pairlist   = self.pairlist.ctypes.data
         self.boxsize = numpy.asarray(boxsize, dtype=numpy.float)
@@ -186,8 +186,8 @@ class System(object):
             #time.sleep(.1)
             self.q[i] = (x*scale, y*scale, z*scale)
         self.E = self.energy()
-        for i in range(self.N):
-            self.ei[i] = self.energy_i(i)
+        #for i in range(self.N):
+        #    self.ei[i] = self.energy_i(i)
     def fillRandom(self):
         """Fill the box with all-random particle locations.
 
@@ -242,10 +242,10 @@ class System(object):
         #return E
         return c_energy(self.SD_p, 0)
 
-    def energy_fromi(self):
-        """Return total energy by using sum of cached values for each atom"""
-        raise Exception("this doesn't work")
-        return .5 * sum(self.ei[0:self.N])
+    #def energy_fromi(self):
+    #    """Return total energy by using sum of cached values for each atom"""
+    #    raise Exception("this doesn't work")
+    #    return .5 * sum(self.ei[0:self.N])
     energy = energy_fromall
     def energy_i_py(self, i, partial=False):
         """Return energy of atom i"""
@@ -347,7 +347,7 @@ class System(object):
 
         self.ntry += 1
         if accept:
-            self.ei[i] = Enew
+            #self.ei[i] = Enew
             self.naccept += 1
 
         else:
@@ -428,7 +428,7 @@ class System(object):
         
 
         if accept:
-            ...
+            pass
         else:
             self.q /= linearScale
         
@@ -441,7 +441,7 @@ class System(object):
         i = self.N-1
         self.q[i] = pos
         self.atomtypes[i] = type
-        self.ei[i] = self.energy_i(i)
+        #self.ei[i] = self.energy_i(i)
         return i
     def delAtom(self, i):
         """Delete an arbitry atom from the system."""
@@ -451,7 +451,7 @@ class System(object):
         self.SD.N    =   self.N    =   self.N-1
         self.q[i] = 0.
         self.atomtypes[i] = 0.
-        self.ei[i] = 0.
+        #self.ei[i] = 0.
 
     def checkContiguous(self):
         """Check if the numpy array are contiguous, if not raise an error."""
@@ -525,7 +525,7 @@ class System(object):
                 #  most efficient)
                 self.q[i] += numpy.random.randn(3) * 2
                 Eold = self.energy_i(i)
-            self.ei[i] = Eold
+            #self.ei[i] = Eold
         print "done removing overlaps"
 
     def qWrapped(self):

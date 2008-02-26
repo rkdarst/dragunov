@@ -31,7 +31,7 @@ struct SimData {
   double dt;
   double beta;
   long *atomtypes;
-  double *ei;
+  //double *ei;
   long *pairlist;
   double trialMoveScale;
   double pairlist_minDistance;
@@ -403,7 +403,7 @@ int trialMove(struct SimData *SD, int n, int flags) {
     ntry += 1;
     //SD->pairlist[i*pairsRowsize+1] += 1;
     if(accept) {
-      SD->ei[i] = Enew;
+      //SD->ei[i] = Enew;
       naccept += 1;
       //SD->pairlist[i*pairsRowsize+1] += 100;
     }
