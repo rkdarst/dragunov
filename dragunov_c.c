@@ -65,6 +65,9 @@ int init_mt(int seed)
 #elif FFid == 6
 #include "ff/lennardjones.c"
 
+#elif FFid == 7
+#include "ff/ho.c"
+
 #else
 #error No Forcefield selected!
 #endif
@@ -119,6 +122,7 @@ double energy_i(struct SimData *SD,
     for (; j<SD->N ; j++ ) {
       if (i == j) continue;
       d = distance(q, boxsize, i, j);
+      //printf("d=%f\n", d);
       E += eij(atomtypes[i], atomtypes[j], d);
       if (E == 1./0.) return(E);
     }
@@ -244,9 +248,9 @@ double calcForce(struct SimData *SD, int flags) {
       //if (d>1) return(0);  // greater than cutoff^2
 
       d = sqrt(d);
-      /*if (d < .25) {
+      if (d < .25) {
 	printf("%f \n", d);
-	}*/
+      }
   
       double Fk[3], rk[3];
       double Fij;
@@ -260,10 +264,10 @@ double calcForce(struct SimData *SD, int flags) {
       Fk[0] = Fij * rk[0]/d;
       Fk[1] = Fij * rk[1]/d;
       Fk[2] = Fij * rk[2]/d;
-      if (Fij > 10. ) {
+      /*if (Fij > 10. ) {
 	printf("%d, %d, %f, %f, %f %f %f \n", 
 	         i,  j,  d, Fij, Fk[0], Fk[1], Fk[2]);
-      }
+		 }*/
 
       F[i*3  ] -= Fk[0];
       F[i*3+1] -= Fk[1];
@@ -328,7 +332,12 @@ double mdStep(struct SimData *SD, int n, int flags) {
   double KE = 0 ;
   for (count=0; count<n; count++) {
     calcForce(SD, flags);
+/*     printf("x1=%f x2=%f f1=%f f2=%f u1=%f u2=%f\n",  */
+/* 	   SD->q[3*0+0],     SD->q[3*1+0], */
+/* 	   SD->force[3*0+0], SD->force[3*1+0],  */
+/* 	   energy_i(SD, 0, flags), energy_i(SD, 0, flags)); */
     KE = integrate(SD, flags);
+/*     printf("\n"); */
   }  
   return(KE);
 }

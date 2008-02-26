@@ -89,6 +89,11 @@ c_forcedotr_i.argtypes = (SimData_p,       # qdata_p
                           ctypes.c_int,    # i
                           ctypes.c_int)    # flags
 
+c_calcForce = dragunov_c.calcForce
+c_calcForce.restype = ctypes.c_double    # always returns zero
+c_calcForce.argtypes = (SimData_p,       # qdata_p
+                        ctypes.c_int)    # flags
+
 c_pairlistInit = dragunov_c.pairlistInit
 c_pairlistInit.restype = ctypes.c_int
 c_pairlistInit.argtypes = (SimData_p,       # SimData_p
@@ -139,6 +144,7 @@ class System(object):
         self.naccept = 0
         self.ntry = 0
 
+        # numpy.float is ctype double
         self.q = numpy.zeros(shape=(self.Nmax, 3), dtype=numpy.float)
         SD.q   = self.q.ctypes.data
         self.qold = numpy.zeros(shape=(self.Nmax, 3), dtype=numpy.float)
@@ -162,8 +168,10 @@ class System(object):
 
 
     def acceptRatio(self):
+        """Return MC acceptance ratio"""
         return self.naccept / self.ntry
     def acceptRatio_last(self):
+        """Return MC acceptance ratio of the last series of trial moves."""
         return self.naccept_last / self.ntry_last
     def fill(self, a=10, b=10, c=10, scale=1.):
         """Fill the box with a crystal structure"""
@@ -181,10 +189,19 @@ class System(object):
         for i in range(self.N):
             self.ei[i] = self.energy_i(i)
     def fillRandom(self):
+        """Fill the box with all-random particle locations.
+
+        There is no checking for overlaps, so you must call a method
+        to remove overlaps/minimize it."""
         for i in range(self.N):
             newpos = numpy.random.uniform(size=(3,)) * self.boxsize
             self.q[i] = newpos
     def zeroVelocity(self):
+        """Zero all velocities.
+
+        The implementation is by setting the qold to q, as per the
+        verlet integrator used.
+        """
         self.qold[:] = self.q[:]
     def eij(self, i, j, dij):
         """Energy of interaction between atomtypes i and j at distance dij"""
@@ -215,7 +232,9 @@ class System(object):
             return (0,0,0)
 
     def energy_fromall(self):
-        """Return total energy by evaluating energy for all atoms"""
+        """Return total energy by evaluating energy for all atoms
+
+        Uses C function c_energy"""
         #E = 0
         #for i in range(self.N):
         #    E += c_energy_i(self.SD_p, i, SVD_ENERGYI_PARTIAL)
@@ -259,28 +278,12 @@ class System(object):
         return E
     energy_i = energy_i_c # select which energ eval function to use
 
-    ##  def pressure_i_py(self, i, partial=False):
-    ##      """Return energy of atom i"""
-    ##      fdotr = 0
-    ##      q = self.q
-    ##      boxsize = self.boxsize
-    ##      #atomtypes = self.atomtypes
-    ##  
-    ##      startat = 0
-    ##      if partial:
-    ##          startat = i+1
-    ##  
-    ##      q1 = q[i]
-    ##      d = q - q1
-    ##      d = numpy.abs(d - (numpy.floor(d/boxsize + .5)) * boxsize)
-    ##      d = numpy.sqrt((d*d).sum(axis=1))  # distances from i to j
-    ##  
-    ##      for j in range(startat, self.N):
-    ##          if i == j:
-    ##              continue
-    ##          #fdotr += fij(atomtypes[i], atomtypes[j], d[j])e
-    ##          # XXX
-    ##      return fdotr
+    def calcForce(self):
+        """Run the c-force calculation routine.
+
+        This must be done before self.force will be updated.
+        """
+        c_calcForce(self.SD_p, self.flags)
     def pressure_c(self, add=False):
         flags = self.flags
         flags = flags | SVD_ENERGYI_PARTIAL
@@ -413,6 +416,23 @@ class System(object):
         return math.log(self.volume/(self.N+1))/self.beta - constant
     
     mu = widomInsertResults
+
+    def isobaricTrialMove_py(self, lnVScale):
+        numpy.product(self.boxsize)
+        V = self.volume
+        #Vnew = exp(ln(V + (random.random()-.5) * scale))
+        #lengthscale = (Vnew / Vold)**(1./3.) # this may not be right
+        linearScale = exp(((random.random()-.5) * lnVScale) / 3.)
+
+        self.q *= linearScale
+        
+
+        if accept:
+            ...
+        else:
+            self.q /= linearScale
+        
+
     def addAtom(self, pos, type):
         """Add an arbitrary atom to the system.  Return new index"""
         if self.N == self.Nmax:
@@ -453,6 +473,26 @@ class System(object):
         print "E_fromall:",E_fromall, "E_fromi",E_fromi, \
               "E difference:", repr(deltaE)
         assert abs(E_fromall - E_fromi) < .001
+    def forceFromNDeriv(self):
+        """Numerically differentiate the energy, return force matrix
+
+        This provides a check for the force calculation
+        """
+        # Use this algorithm: - (E(x+dx) - E(x-dx)) / 2*dx
+        dx = .01
+        q = self.q
+        force = self.force.copy()
+        force[:] = 0
+        for n in range(self.N):
+            for i in range(3):
+                qorig = q[n,i]
+                q[n,i] -= dx
+                Elow = self.energy_i(n)
+                q[n,i] = qorig + dx
+                Ehigh = self.energy_i(n)
+                q[n,i] = qorig
+                force[n,i] = - (Ehigh-Elow) / (2 * dx)
+        return force
     def pairlistInit(self, cutoff):
         flags = self.flags
         return c_pairlistInit(self.SD_p, cutoff, flags)
@@ -723,11 +763,39 @@ if __name__ == "__main__":
                 print >>log, line
                 log.flush()
         S.writeUghfile("ugh/equilbrated-%s.ugh"%N)
-    else:
-        skip = 1
-        S = System(N=200, beta=1/2.0,
+    elif len(sys.argv) > 1 and sys.argv[1] == "test_ff":
+        #N = 200
+        N = 2
+        S = System(N=N, beta=1/2.0,
                    boxsize=(10,10,10), trialMoveScale=.25,
                    dt=.001)
+        #S.fillRandom()
+        S.fill()
+        S.zeroVelocity()
+        #S.removeOverlaps(50.)
+        S.makebox() ; S.display()
+        skip = 1
+        i = 0
+        while True:
+            i += skip
+            if i == 150000:
+                S.resetStatistics()
+            #S.trialMove(verbose=False, n=skip)
+            #S.calcForce()
+            print S.force[:N]
+            print S.forceFromNDeriv()[:N]
+            print
+            ke = c_mdStep(S.SD_p, skip, 0)
+            S.display()
+            #print >> logfile, i, S.T, S.density, S.energy(), \
+            #      S.pressure(add=True), S.pressureAverage(), ke
+    else:
+        skip = 1
+        N = 200
+        #N = 2
+        S = System(N=N, beta=1/2.0,
+                   boxsize=(10,10,10), trialMoveScale=.25,
+                   dt=.0001)
         pairlist = False
         if pairlist: S.flags |= SVD_USE_PAIRLIST
         S.fillRandom()
@@ -761,6 +829,6 @@ if __name__ == "__main__":
             #S.pairlistCheck(strict=False)
             logfile.flush()
             #time.sleep(.5)
-            print
+            #print
 
     #time.sleep(10)

@@ -30,8 +30,8 @@ inline double eij(int i, int j, double d) {
     d6 *= d6;
     E = 4 * (d6*d6 - d6);
     E *= LJ_EPSILON;
-    E += 0.016316891136;        // U(r=2.5 sigma)
-    //E += 0.00217478039165499;   // U(r=2.5 sigma)
+    //E += 0.016316891136;        // U(r=2.5 sigma)
+    //E += 0.00217478039165499;   // U(r=3.5 sigma)
     return (E);
   }
   else
@@ -56,4 +56,4 @@ inline double fij(int i, int j, double d) {
   }
   else
     return(0.0);
-}b
+}
