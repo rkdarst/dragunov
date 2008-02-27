@@ -35,6 +35,8 @@ struct SimData {
   long *pairlist;
   double trialMoveScale;
   double pairlist_minDistance;
+  double prob_PMove;
+  double isobarPressure;
 } ;
 
 int init_mt(int seed)
@@ -364,12 +366,21 @@ double pressure_c(struct SimData *SD, int flags) {
 }
 
 
+int trialMove_isobaric(struct SimData *SD);
 int trialMove(struct SimData *SD, int n, int flags) {
   /* Run N monte carlo trial moves, return number of moves accepted */
   double qi_old[3];
   double Eold, Enew;
   int ntry=0, naccept=0, i, counter1, accept;
+  double x, ran;
   for(counter1=0; counter1<n; counter1++) {
+
+    /* What type of move do we need to do? */
+    ran = genrand_real2(); /* on [0,1) */
+    if (ran < SD->prob_PMove) {
+      trialMove_isobaric(SD);
+      continue;
+    }
     
     i = (int) floor(genrand_real2()*(SD->N));
     qi_old[0] = SD->q[i*3  ];
@@ -392,7 +403,6 @@ int trialMove(struct SimData *SD, int n, int flags) {
       accept = 0;
     }
     else {
-      double x, ran;
       x = exp(SD->beta*(Eold-Enew));
       ran = genrand_real2();
       if (ran < x)
@@ -418,6 +428,64 @@ int trialMove(struct SimData *SD, int n, int flags) {
   } // end loop over n, 
   return(naccept);
 }
+int trialMove_isobaric(struct SimData *SD) {
+  int i;
+  double *q = SD->q;
+  double *boxsize = SD->boxsize;
+  double ran;
+
+  //def trialMove_isobaric_py(self, pressure, lnVScale):
+  double lnVScale = .5;
+  double pressure = SD->isobarPressure;
+
+  double Vold = boxsize[0] * boxsize[1] * boxsize[2];
+  double Eold = energy(SD, 0);
+
+  //#Vnew = exp(ln(V + (random.random()-.5) * scale))
+  //#lengthscale = (Vnew / Vold)**(1./3.) # this may not be right
+  double linearScale = exp(((genrand_real1()/*[0,1]*/-.5) * lnVScale) / 3.);
+  double volumeScale = linearScale * linearScale * linearScale;
+
+
+  //self.q *= linearScale
+  for (i=0 ; i < SD->N*3; i++) {
+    q[i] *= linearScale;
+  }
+  //self.boxsize *= linearScale
+  boxsize[0]*=linearScale; boxsize[1]*=linearScale; boxsize[2]*=linearScale;
+
+  double Enew = energy(SD, 0);
+  double Vnew = Vold * volumeScale;
+
+
+  double x = - SD->beta * (Enew - Eold + pressure*(Vnew-Vold) - \
+			   ((SD->N+1)/SD->beta)*log(volumeScale));
+  printf("%f\n", x);
+
+  int accept;
+  if (x > 0)
+    accept = 1;
+  else {
+    x = exp(x);
+    printf("%f\n", x);
+    ran = genrand_real2();
+    if (ran < x)  accept = 1;
+    else          accept = 0;
+  }
+  if (accept)
+    printf("+++ %.3f pressure move  +++\n", linearScale);
+  else {
+    printf("--- %.3f pressure move  ---\n", linearScale);
+    //self.q /= linearScale;
+    for (i=0 ; i < SD->N*3; i++) {
+      q[i] /= linearScale;
+    }
+    //self.boxsize /= linearScale;
+    boxsize[0]/=linearScale; boxsize[1]/=linearScale; boxsize[2]/=linearScale;
+  }
+  return(0);
+}
+
 
 int pairlistInit(struct SimData *SD, double cutoff, int flags) {
   // SD->pairlist is a (natoms, pairsRowsize) array, capable of holding up to 15 pairs

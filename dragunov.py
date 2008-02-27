@@ -44,6 +44,8 @@ class SimData(ctypes.Structure):
                 ("pairlist", ctypes.c_void_p),
                 ("trialMoveScale", ctypes.c_double),
                 ("pairlist_minDistance", ctypes.c_double),
+                ("prob_PMove", ctypes.c_double),
+                ("isobarPressure", ctypes.c_double),
                 ]
 SimData_p = ctypes.POINTER(SimData)
 
@@ -125,7 +127,7 @@ class System(object):
 
     def __init__(self, N, beta=1., Nmax=None, boxsize=(10,10,10),
                  trialMoveScale=1,
-                 pressureTarget=None,
+                 isobarPressure=None,
                  dt=.01):
         if Nmax == None:
             Nmax = N+50
@@ -135,11 +137,15 @@ class System(object):
         SD.Nmax =   self.Nmax =   Nmax
         SD.dt =     self.dt   =   dt
         SD.beta =   self.beta =   beta
-        self.pressureTarget = pressureTarget
-        self.sizeScalar = 1.
+        SD.prob_PMove = self.prob_PMove = 0
+
         SD.trialMoveScale = self.trialMoveScale = trialMoveScale
         self.mu_dict = { }
         self._pressureList = [ ]
+        if isobarPressure:
+            SD.isobarPressure = self.isobarPressure = isobarPressure
+            # default to 1 V move for every N+1 steps
+            self.setMoveProb(shift=self.N, pressure=1)
 
         self.naccept = 0
         self.ntry = 0
@@ -417,20 +423,66 @@ class System(object):
     
     mu = widomInsertResults
 
-    def isobaricTrialMove_py(self, lnVScale):
+    def setMoveProb(self, shift, volume=0):
+        """Set trial move probabilities
+
+        If we are doing an ensemble like NTP, we need to do both
+        particle moves AND moves in volume-space.  This method adjusts
+        the relative probabilities of the different types of moves.
+        For example, we can have it do (on average) one volume move
+        for every N particle moves.  (this is the default, as set in
+        the __init__() method).
+
+        The arguments are `shift` and `pressure`, which are for the
+        relative probs for each of the different types of moves.  The
+        probs are normalized before setting, so you can do::
+
+          setMoveProb(shift=self.N, pressure=1)
+
+        so that a pressure move is done on average once for every N
+        shifts.
+        """
+        sum_ = shift + pressure
+        self.SD.prob_PMove = self.prob_PMove = pressure / sum_
+        
+    def trialMove_isobaric_py(self, pressure, lnVScale):
         numpy.product(self.boxsize)
-        V = self.volume
+
+        Vold = self.volume
+        Eold = self.energy()
+
         #Vnew = exp(ln(V + (random.random()-.5) * scale))
         #lengthscale = (Vnew / Vold)**(1./3.) # this may not be right
-        linearScale = exp(((random.random()-.5) * lnVScale) / 3.)
+        linearScale = math.exp(((random.random()-.5) * lnVScale) / 3.)
+        volumeScale = linearScale * linearScale * linearScale
 
         self.q *= linearScale
-        
+        self.boxsize *= linearScale
+
+        Enew = self.energy()
+        Vnew = Vold * volumeScale
+
+
+        x = - self.beta * (Enew - Eold + pressure*(Vnew-Vold) - \
+                           ((self.N+1)/self.beta)*math.log(volumeScale))
+        print x
+
+        if x > 0:
+            accept = True
+        else:
+            x = math.exp(x)
+            print x
+            ran = random.random()
+            if ran < x:  accept = True
+            else:        accept = False
 
         if accept:
+            print "+++ %.3f pressure move  +++"%linearScale
             pass
         else:
+            print "--- %.3f pressure move  ---"%linearScale
             self.q /= linearScale
+            self.boxsize /= linearScale
         
 
     def addAtom(self, pos, type):
