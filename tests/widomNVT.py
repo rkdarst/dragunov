@@ -8,54 +8,48 @@ import random
 import sys
 import dragunov
 
-N = 400
 skip = 100
-Nsteps = 1000000
-isobarPressure = 1.0
-Ps = (.25, .5, 1., 2., 4.)
+Nsteps = 10000000
+densities = (.5, .6)
 
 
-for isobarPressure in Ps:
+for density in densities:
     #logname = "logfile.txt"
-    logname = "tests/isobaric/logfile-P=%s.txt"%isobarPressure
+    logname = "tests/widomNVT/logfile-d=%s.txt"%density
     logfile = file(logname, "w")
     
     i = 0
+    N = int(1000 * density)
     S = dragunov.System(N=N, beta=1/2.0,
                         boxsize=(10,10,10), trialMoveScale=.25,
                         dt=.001,
-                        isobarPressure=isobarPressure)
-    #S.setMoveProb(shift=N, pressure=1)
-    pairlist = False
+                        )
     S.fillRandom()
     S.removeOverlaps(10.)
     
     S.makebox()
     S.display()
     
-    S.trialMove(n=10000)
+    #S.trialMove(n=10000)
     S.display()
-    #                    1  2  3  4    5  6  7     8  9     10
-    print >> logfile, "# i, T, N, rho, E, P, Pavg, V, Vavg, rho_avg"
+    #                    1  2  3  4    5  6  7     8  9     10       11
+    print >> logfile, "# i, T, N, rho, E, P, Pavg, V, Vavg, rho_avg, mu"
     while i <= Nsteps:
         #if i%10 and pairlist: S.pairlistInit(3.25)
         i += skip
-        if i == 250000:
+        if i == 100000:
             S.resetStatistics()
-        #if random.random() * S.N <= 1:
-        #    S.isobaricTrialMove_py(pressure=1.0, lnVScale=.5)
         S.trialMove(verbose=False, n=skip)
     
-        #ke = dragunov.c_mdStep(S.SD_p, skip, 0)
         #if 0 or pairlist: S.pairlistCheck(2.75)
-        #S.widomInsert()
+        S.widomInsert(n=10)
         if i % 100 == 0:
             if i%1000 == 0: S.display()
             print >> logfile, i, S.T, S.N, S.density, S.energy(), \
                   S.pressure(add=True), S.pressureAverage(), \
                   S.volume, S.volumeAverage(), \
-                  S.N / S.volumeAverage()
-                  #, ke
+                  S.N / S.volumeAverage(), \
+                  S.widomInsertResults()
         print "step: %d"%i,"\r",
         sys.stdout.flush()
         

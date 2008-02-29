@@ -435,7 +435,7 @@ int trialMove_isobaric(struct SimData *SD) {
   double ran;
 
   //def trialMove_isobaric_py(self, pressure, lnVScale):
-  double lnVScale = .5;
+  double lnVScale = .25;
   double pressure = SD->isobarPressure;
 
   double Vold = boxsize[0] * boxsize[1] * boxsize[2];
@@ -460,22 +460,23 @@ int trialMove_isobaric(struct SimData *SD) {
 
   double x = - SD->beta * (Enew - Eold + pressure*(Vnew-Vold) - \
 			   ((SD->N+1)/SD->beta)*log(volumeScale));
-  printf("%f\n", x);
+  //printf("%f\n", x);
 
   int accept;
   if (x > 0)
     accept = 1;
   else {
     x = exp(x);
-    printf("%f\n", x);
+    //printf("%f\n", x);
     ran = genrand_real2();
     if (ran < x)  accept = 1;
     else          accept = 0;
   }
-  if (accept)
-    printf("+++ %.3f pressure move  +++\n", linearScale);
+  if (accept) {
+    //printf("+++ %.3f pressure move  +++\n", linearScale); 
+  }
   else {
-    printf("--- %.3f pressure move  ---\n", linearScale);
+    //printf("--- %.3f pressure move  ---\n", linearScale);
     //self.q /= linearScale;
     for (i=0 ; i < SD->N*3; i++) {
       q[i] /= linearScale;

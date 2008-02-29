@@ -142,10 +142,11 @@ class System(object):
         SD.trialMoveScale = self.trialMoveScale = trialMoveScale
         self.mu_dict = { }
         self._pressureList = [ ]
+        self._volumeList   = [ ]
         if isobarPressure:
             SD.isobarPressure = self.isobarPressure = isobarPressure
             # default to 1 V move for every N+1 steps
-            self.setMoveProb(shift=self.N, pressure=1)
+            self.setMoveProb(shift=self.N, volume=1)
 
         self.naccept = 0
         self.ntry = 0
@@ -171,6 +172,8 @@ class System(object):
 
     def resetStatistics(self):
         self._pressureList = [ ]
+        self._volumeList   = [ ]
+        self.mu_dict = { }
 
 
     def acceptRatio(self):
@@ -307,10 +310,13 @@ class System(object):
         if add:
             pressure += density/self.beta
         self._pressureList.append(pressure)
+        self._volumeList.append(volume)
         return pressure
     pressure = pressure_c
     def pressureAverage(self):
         return sum(self._pressureList)/len(self._pressureList)
+    def volumeAverage(self):
+        return sum(self._volumeList)/len(self._volumeList)
     def pressureTrialMove(self):
         # get current pressure
         # trial boxsize change
@@ -381,16 +387,19 @@ class System(object):
         """Save a data point for widom insertion.
         """
         # n is the number of test moves to run
-        if n is not None:
-            for _ in xrange(n):
-                self.widomInsert(type=type)
-            return
-        newpos = numpy.random.uniform(size=(3,)) * self.boxsize
-        newi = self.addAtom(newpos, type=type)
-        Eadded = self.energy_i(newi)
-        #print Eadded, self.beta
-        self.mu_dict.setdefault(type, []).append(math.exp(-Eadded*self.beta))
-        self.delAtom(newi)
+        #if n is not None:
+        #    for _ in xrange(n):
+        #        self.widomInsert(type=type)
+        #    return
+        if n == None:
+            n = 1
+        for _ in xrange(n):
+            newpos = numpy.random.uniform(size=(3,)) * self.boxsize
+            newi = self.addAtom(newpos, type=type)
+            Eadded = self.energy_i(newi)
+            #print Eadded, self.beta
+            self.mu_dict.setdefault(type, []).append(math.exp(-Eadded*self.beta))
+            self.delAtom(newi)
         
     def widomInsertResults(self, type=0):
         """
@@ -401,26 +410,16 @@ class System(object):
         if avg == 0:
             return 0  # this is technically incorrect, but we need to return
                       # something that won't make parse errors
-        # constant related to the deBroglie wavelength
-        # the constant should also be adjusted for number of dimensions
-        constant = 3./self.beta
 
-        mu = -math.log(volume*avg/(self.N+1))/self.beta + constant
-        return mu
-        # 
-
-        # constant related to the deBroglie wavelength
-        # the constant should also be adjusted for number of dimensions
-        #thermWavelength3 = 1.**1.5
-        thermWavelength3 = 1.
-        mu_ig = -math.log(volume*thermWavelength3/(self.N+1))/self.beta
+        # must be adjusted to debroglie wavelength, if necessary.
+        #mu_ig = -math.log(volume/( (self.N+1)* 1.**3) )/self.beta
         mu_excess = -math.log(avg)/self.beta
-        return mu_ig + mu_excess
+        return mu_excess #+ mu_ig
     def widomInsertCorrection1(self):
         # _add_ this to the reported mu tocorrect the mu.
-        constant = 3./self.beta
-        return math.log(self.volume/(self.N+1))/self.beta - constant
-    
+        #constant = 3./self.beta
+        #eturn math.log(self.volume/(self.N+1))/self.beta - constant
+        pass
     mu = widomInsertResults
 
     def setMoveProb(self, shift, volume=0):
@@ -442,8 +441,8 @@ class System(object):
         so that a pressure move is done on average once for every N
         shifts.
         """
-        sum_ = shift + pressure
-        self.SD.prob_PMove = self.prob_PMove = pressure / sum_
+        sum_ = shift + volume
+        self.SD.prob_PMove = self.prob_PMove = volume / sum_
         
     def trialMove_isobaric_py(self, pressure, lnVScale):
         numpy.product(self.boxsize)
