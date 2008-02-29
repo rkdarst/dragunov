@@ -1,4 +1,4 @@
-dragunov is by Richard Darst, 2007.  Created during my work at
+dragunov is by Richard Darst, 2007-2008.  Created during my work at
 UT-Austin.
 
 
@@ -7,10 +7,13 @@ UT-Austin.
 GENERAL INFO
 ~~~~~~~~~~~~
 
+There is an introduction to the code in dragunov.py.  Start reading
+comments from the top.
+
 Look at the bottom of dragunov.py for demos on how to use it, after
-building the C module (see below).  You can type 
-`python dragunov.py demo` for a visual interactive demo, which can
-also serve as a check that everything is set up properly.
+building the C module (see below).  You can type `python dragunov.py
+demo` for a visual interactive demo, which can also serve as a check
+that everything is set up properly.
 
 
 
@@ -26,7 +29,7 @@ python-ctypes.  I'm not sure what the minimum version is, but on
 debian etch I built it myself.  It wasn't hard.
 
 python-visual (debian package).  Makes it easy to display things in a
-3D interactive environment.
+3D interactive environment, but not needed for raw simulations.
 
 
 
@@ -78,4 +81,5 @@ ff/* -- Force Field definition files.  Each of these files should
 svd_display.py -- Program to run to display output .ugh files.  
                   `python svd_display.py <filename>.ugh`
 
-
+tests/* -- Test codes.  Will be useful to see how to use various
+           features.
