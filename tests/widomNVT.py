@@ -10,7 +10,7 @@ import dragunov
 
 skip = 100
 Nsteps = 10000000
-densities = (.5, .6)
+densities = (.6,)
 
 
 for density in densities:

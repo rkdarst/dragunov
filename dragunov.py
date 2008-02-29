@@ -2,6 +2,43 @@
 # The University of Texas at Austin
 from __future__ import division
 
+# Hi, welcome to Dragunov.  I'll be your guide to the code today.
+# 
+# There are two main components, this python file and the C file.  The
+# python file is the only one you'll need to use in your code.  The
+# python imports the C file and calls its functions.  If you
+# understand everything from the python file, the C file is just small
+# additions which you can see later.
+#
+# Most of the code was originally written in python, and then only
+# later transferred to C.  So, there is left over methods in the
+# python module which aren't used very often.  There are switches
+# which select between the python and the C implementations of
+# different things (like making a trial move).  For example, you can see:
+#
+#    def trialMove_py(self, verbose=False):
+#        [...]
+#    def trialMove_c(self, n=1, verbose=False):
+#        [...]
+#    trialMove = trialMove_c
+#
+# The meaning of this should be clear.  Most C/python functions should
+# be similar, but there are still rough edges.
+#
+# Let's continue the tour.  I'm only going to point out interesting
+# things.
+#
+# COMPILING
+#
+# Everything you need should be in the build.sh script, just do the
+# command "sh build .sh".  If you look in the file, there is a way to
+# compile it with a different compiler if you want to try to make it
+# go faster.  It makes the module dragunov_c.so which is imported by
+# here.
+#
+# Other dependencies:
+#   ctypes
+#   python-visual (for fancy displays!)
 
 import math
 import random
@@ -11,15 +48,23 @@ import time
 import ctypes
 import numpy
 numpy.random.seed(123456)
-import visual
+try:
+    import visual
+except:
+    # display won't work, but no error raised.
+    pass
 try:
     from rkddp.interact import interact
 except ImportError:
     pass
-import cliargs
 
-time.sleep(0)  # prevent an "imported module not used" error
+# prevent an "imported module not used" error when checked with
+# pychecker
+time.sleep(0)
 
+# These flags are also defined in the C file, and allow different
+# switches to be tuned via the "flags" int paramater which is passed
+# to C.
 
 SVD_ENERGYI_PARTIAL       =   1
 SVD_VERBOSE_1             =   2
@@ -27,6 +72,20 @@ SVD_VERBOSE_2             =   4
 SVD_PAIRLIST_INCREMENTAL  =   8
 SVD_USE_PAIRLIST          =  16
 
+# This is the primary data structure.  It uses the module `ctypes`.
+# Ctypes is black magic, and I'm not going to explain it-- its
+# documentation is pretty good.
+#
+# The thing below is a SimData object.  It represents a C structure
+# (`struct SimData` in the C code).  It is passed to all of the C
+# functions, and contains pointers to things like positions (q),
+# boxsize, and so on.
+#
+# The structure doesn't really contain the data, but pointers to the
+# data.  I make all arrays with numpy and give the SimData struct
+# pointers to them.  Since it's all pointers, both the python and C
+# always see the same data and are synced.  But, you have to always
+# modify arrays in-place.
 
 class SimData(ctypes.Structure):
     _fields_ = [("q", ctypes.c_void_p),
@@ -48,6 +107,11 @@ class SimData(ctypes.Structure):
                 ("isobarPressure", ctypes.c_double),
                 ]
 SimData_p = ctypes.POINTER(SimData)
+
+# Now, we load the C module using ctypes.  This is magic.  All the
+# code below sets up python interfaces to the C functions.  You can
+# make enough sense out of it by just glancing at it, to really
+# understand look at the ctypes docs.
 
 dragunov_c = numpy.ctypeslib.load_library('dragunov_c', '.')
 
@@ -113,6 +177,14 @@ dragunov_c.init_gen_rand.restype = None
 dragunov_c.init_mt(10)
 
 class System(object):
+    """Simulation Object.
+
+    The main sim-object.  Usually one is initialized per program, but
+    there is nothing preventing having multiple of them simultaneously
+    (replica exchange, anyone?)
+    """
+    # These thing define "properties" of the class.  They are like
+    # attribute, but are dynamically calculated like methods.
     def _volume_get(self):
         return numpy.product(self.boxsize)
     volume = property(fget=_volume_get)
@@ -129,6 +201,18 @@ class System(object):
                  trialMoveScale=1,
                  isobarPressure=None,
                  dt=.01):
+        """All initilization
+
+        Initilize:
+        - numpy arrays
+        - C pointers to numpy arrays
+        - store other constants of the simulation, like temperature
+        - lists for storing time averages.
+
+        Most of these constants are stored in two places: on the
+        python object (self) and in the SimData structure (self.SD)
+        for access in C.  Be aware of keeping them both updated!
+        """
         if Nmax == None:
             Nmax = N+50
         SD =      self.SD = SimData()
@@ -171,6 +255,11 @@ class System(object):
         self.flags = 0
 
     def resetStatistics(self):
+        """Reset averages
+
+        This method resets the averages for pressure, volume, chemical
+        potential, etc.
+        """
         self._pressureList = [ ]
         self._volumeList   = [ ]
         self.mu_dict = { }
@@ -209,7 +298,9 @@ class System(object):
         """Zero all velocities.
 
         The implementation is by setting the qold to q, as per the
-        verlet integrator used.
+        verlet integrator used.  This only has any significance if you
+        are using the MD integrator, which is a corner case (not what
+        dragunov is designed for, really.)
         """
         self.qold[:] = self.q[:]
     def eij(self, i, j, dij):
@@ -385,6 +476,15 @@ class System(object):
     trialMove = trialMove_c
     def widomInsert(self, type=0, n=None):
         """Save a data point for widom insertion.
+
+        Insert one atom of `type` at a random location evenly
+        distributed throughout the box.  Record the increase of energy
+        caused by this atom.  Remove the inserted atom.  Repeat `n`
+        times for better sampling.
+
+        Since insertion is a relatively cheap process compared to
+        doing 1000 trial moves, it's probably best to do trial moves
+        in groups and then multiple insertions at once.
         """
         # n is the number of test moves to run
         #if n is not None:
@@ -402,7 +502,13 @@ class System(object):
             self.delAtom(newi)
         
     def widomInsertResults(self, type=0):
-        """
+        """Return the chemical potential of a species.
+
+        This is a separate function, because it must not only average
+        the stored values, but take a log and multiply by constants.
+
+        This only returns the excess chemical potential, not the ideal
+        gas contribution (see frenkel and smit).
         """
         volume = numpy.product(self.boxsize)
         avg = sum(self.mu_dict[type]) / len(self.mu_dict[type])
@@ -416,6 +522,11 @@ class System(object):
         mu_excess = -math.log(avg)/self.beta
         return mu_excess #+ mu_ig
     def widomInsertCorrection1(self):
+        """Unused
+
+        Used to correct for the ideal gas contribution to the chemical
+        potential.
+        """
         # _add_ this to the reported mu tocorrect the mu.
         #constant = 3./self.beta
         #eturn math.log(self.volume/(self.N+1))/self.beta - constant
@@ -445,6 +556,13 @@ class System(object):
         self.SD.prob_PMove = self.prob_PMove = volume / sum_
         
     def trialMove_isobaric_py(self, pressure, lnVScale):
+        """Volume-adjusting move for the isobaric ensemble.
+
+        Do a random walk in `ln(V)`, maintaining a constant pressure.
+
+        This function has been replaced by the C one, the python one
+        isn't used anymore.
+        """
         numpy.product(self.boxsize)
 
         Vold = self.volume
@@ -516,7 +634,13 @@ class System(object):
         for i in xrange(self.N):
             c_energy_i(self.SD_p, i, partial|2)
     def checkEnergyConsistency(self):
-        """
+        """Check of energy self-consistency.
+
+        Do the functinos which calculate total energy of all atoms, vs
+        those that do it for only one atom, give same answer for the
+        energy?
+
+        Used as a check, not in the main simulation.
         """
         E_fromall = self.energy_fromall()
         E_fromi = self.energy_fromi()
@@ -527,7 +651,8 @@ class System(object):
     def forceFromNDeriv(self):
         """Numerically differentiate the energy, return force matrix
 
-        This provides a check for the force calculation
+        This provides a check for the force calculation.  Not used in
+        simulation.
         """
         # Use this algorithm: - (E(x+dx) - E(x-dx)) / 2*dx
         dx = .01
@@ -544,7 +669,12 @@ class System(object):
                 q[n,i] = qorig
                 force[n,i] = - (Ehigh-Elow) / (2 * dx)
         return force
+    # There are various functions I've made for calculating pairlists,
+    # but they haven't been tested fully.  (I have tested them, and
+    # they seem to work, but I need to double check them.)
     def pairlistInit(self, cutoff):
+        """Initilize th
+        """
         flags = self.flags
         return c_pairlistInit(self.SD_p, cutoff, flags)
         
@@ -559,8 +689,8 @@ class System(object):
         """Remove overlaps of atoms (make energy non-infinite)
 
         Iterates through all atoms, and for each one with infinite
-        energy, give it random displacements until it has finite
-        energy.
+        energy (or energy above `Emax`), give it random displacements
+        until it has finite energy.
         """
         for i in range(self.N):
             Eold = self.energy_i(i)
@@ -580,12 +710,17 @@ class System(object):
         print "done removing overlaps"
 
     def qWrapped(self):
-        """Return coordinates wrapped to fit in boxsize"""
+        """Return coordinates wrapped to fit in boxsize
+
+        Used for display."""
         # wrapped means in interval [0, boxsize)
         q = self.q
         return numpy.mod(q, self.boxsize)
     def display(self):
-        """Update visual display of atoms"""
+        """Update visual display of atoms.
+
+        Requires python-visual to be installed.  Call this function
+        again to update positions"""
         q = self.qWrapped()
         c = {0: visual.color.white,
              1: visual.color.green,
@@ -684,7 +819,9 @@ def readUghfile(filename):
         
         
 if __name__ == "__main__":
+    import cliargs
     if len(sys.argv) > 1 and sys.argv[1] == "timing":
+        # test timings of the simulation.
         disp = False
         S = System(N=600, trialMoveScale=.25)
         S.flags |= SVD_USE_PAIRLIST
@@ -701,6 +838,7 @@ if __name__ == "__main__":
         #S.trialMove_c(100000)
         #S.checkEnergyConsistency()
     elif len(sys.argv) > 1 and sys.argv[1] == "demo":
+        # show a nice demo to impress your boss.
         S = System(N=500)
         S.fill()
         S.makebox()
@@ -714,6 +852,7 @@ if __name__ == "__main__":
                 sys.stdout.flush()
             i += 1
     elif len(sys.argv) > 1 and sys.argv[1] == "exp1":
+        # something to do an experiment
         opts, args = cliargs.get_cliargs()
         disp = False
         rho = float(args["rho"])
@@ -753,6 +892,7 @@ if __name__ == "__main__":
         #S.writeUghfile(series+name+".ugh")
         print "accept ratio:", S.acceptRatio()
     elif len(sys.argv) > 1 and sys.argv[1] == "exp1_02":
+        # another experiment code
         opts, args = cliargs.get_cliargs()
         disp = False
         rho = float(args["rho"])
@@ -800,6 +940,7 @@ if __name__ == "__main__":
         print "accept ratio:", S.acceptRatio()
         sys.exit(0)
     elif len(sys.argv) > 1 and sys.argv[1] == "gen_config":
+        # generate equilibrated state points.
         N = int(sys.argv[2])
         S = System(N=N)
         S.fill()
@@ -815,6 +956,7 @@ if __name__ == "__main__":
                 log.flush()
         S.writeUghfile("ugh/equilbrated-%s.ugh"%N)
     elif len(sys.argv) > 1 and sys.argv[1] == "test_ff":
+        # I guess this tests the force fields.
         #N = 200
         N = 2
         S = System(N=N, beta=1/2.0,
@@ -841,6 +983,7 @@ if __name__ == "__main__":
             #print >> logfile, i, S.T, S.density, S.energy(), \
             #      S.pressure(add=True), S.pressureAverage(), ke
     else:
+        # random playing around with it.
         skip = 1
         N = 200
         #N = 2
