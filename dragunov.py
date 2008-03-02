@@ -392,14 +392,13 @@ class System(object):
         for i in range(0, self.N-1):
             fdotr += c_forcedotr_i(self.SD_p, i, flags)
         volume = self.volume
-        density = self.density
         dimensions = 3
                  # v-- should be "+" for LJ correct results
                  # v-- this also makes pressure increase with
                  #     increasing density for S2S- 2s units
         pressure = + fdotr / (dimensions * volume)
         if add:
-            pressure += density/self.beta
+            pressure += self.density/self.beta
         self._pressureList.append(pressure)
         self._volumeList.append(volume)
         return pressure
@@ -707,7 +706,7 @@ class System(object):
                 self.q[i] += numpy.random.randn(3) * 2
                 Eold = self.energy_i(i)
             #self.ei[i] = Eold
-        print "done removing overlaps"
+        #print "done removing overlaps"
 
     def qWrapped(self):
         """Return coordinates wrapped to fit in boxsize
