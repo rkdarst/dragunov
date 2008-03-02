@@ -43,6 +43,7 @@ from __future__ import division
 import math
 import random
 random.seed(12345)
+import os.path
 import sys
 import time
 import ctypes
@@ -113,7 +114,8 @@ SimData_p = ctypes.POINTER(SimData)
 # make enough sense out of it by just glancing at it, to really
 # understand look at the ctypes docs.
 
-dragunov_c = numpy.ctypeslib.load_library('dragunov_c', '.')
+dragunov_c = numpy.ctypeslib.load_library('dragunov_c',
+                                          os.path.dirname(__file__))
 
 c_eij = dragunov_c.eij
 dragunov_c.eij.restype = ctypes.c_double
