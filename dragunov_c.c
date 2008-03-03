@@ -34,6 +34,7 @@ struct SimData {
   //double *ei;
   long *pairlist;
   double trialMoveScale;
+  double trialMoveIsobaricScale;
   double pairlist_minDistance;
   double prob_PMove;
   double isobarPressure;
@@ -373,6 +374,7 @@ int trialMove(struct SimData *SD, int n, int flags) {
   double Eold, Enew;
   int ntry=0, naccept=0, i, counter1, accept;
   double x, ran;
+  double trialmovescale = SD->trialMoveScale;
   for(counter1=0; counter1<n; counter1++) {
 
     /* What type of move do we need to do? */
@@ -391,7 +393,6 @@ int trialMove(struct SimData *SD, int n, int flags) {
 
     // v randn returns normal gaussion distributed points
     //#define trialmovescale .15
-    double trialmovescale = SD->trialMoveScale;
     SD->q[i*3  ] += trialmovescale*(genrand_real1() - .5) ;
     SD->q[i*3+1] += trialmovescale*(genrand_real1() - .5) ;
     SD->q[i*3+2] += trialmovescale*(genrand_real1() - .5) ;
@@ -435,7 +436,7 @@ int trialMove_isobaric(struct SimData *SD) {
   double ran;
 
   //def trialMove_isobaric_py(self, pressure, lnVScale):
-  double lnVScale = .25;
+  double lnVScale = SD->trialMoveIsobaricScale;
   double pressure = SD->isobarPressure;
 
   double Vold = boxsize[0] * boxsize[1] * boxsize[2];

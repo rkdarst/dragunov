@@ -103,6 +103,7 @@ class SimData(ctypes.Structure):
                 #("ei", ctypes.c_void_p),
                 ("pairlist", ctypes.c_void_p),
                 ("trialMoveScale", ctypes.c_double),
+                ("trialMoveIsobaricScale", ctypes.c_double),
                 ("pairlist_minDistance", ctypes.c_double),
                 ("prob_PMove", ctypes.c_double),
                 ("isobarPressure", ctypes.c_double),
@@ -200,7 +201,8 @@ class System(object):
     T = property(fget=_temperature_get)
 
     def __init__(self, N, beta=1., Nmax=None, boxsize=(10,10,10),
-                 trialMoveScale=1,
+                 trialMoveScale=.25,
+                 trialMoveIsobaricScale=.25,
                  isobarPressure=None,
                  dt=.01):
         """All initilization
@@ -226,6 +228,8 @@ class System(object):
         SD.prob_PMove = self.prob_PMove = 0
 
         SD.trialMoveScale = self.trialMoveScale = trialMoveScale
+        SD.trialMoveIsobaricScale = self.trialMoveIsobaricScale = \
+                                    trialMoveIsobaricScale
         self.mu_dict = { }
         self._pressureList = [ ]
         self._volumeList   = [ ]

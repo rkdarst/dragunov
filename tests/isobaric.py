@@ -25,7 +25,7 @@ for isobarPressure in Ps:
                         boxsize=(10,10,10), trialMoveScale=.25,
                         dt=.001,
                         isobarPressure=isobarPressure)
-    #S.setMoveProb(shift=N, pressure=1)
+    #S.setMoveProb(shift=N, pressure=1)  # done automatically now
     pairlist = False
     S.fillRandom()
     S.removeOverlaps(10.)
@@ -42,13 +42,11 @@ for isobarPressure in Ps:
         i += skip
         if i == 250000:
             S.resetStatistics()
+        # The below is intergrated into the C trialMove now.
         #if random.random() * S.N <= 1:
         #    S.isobaricTrialMove_py(pressure=1.0, lnVScale=.5)
         S.trialMove(verbose=False, n=skip)
     
-        #ke = dragunov.c_mdStep(S.SD_p, skip, 0)
-        #if 0 or pairlist: S.pairlistCheck(2.75)
-        #S.widomInsert()
         if i % 100 == 0:
             if i%1000 == 0: S.display()
             print >> logfile, i, S.T, S.N, S.density, S.energy(), \
