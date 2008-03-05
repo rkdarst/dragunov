@@ -1,14 +1,15 @@
 /* Richard Darst, 2007 */
 
-#warning Note: truncated Lennard Jones potential
+
+//#warning Note: truncated Lennard Jones potential
 #ifndef LJ_SIGMA
   #define LJ_SIGMA 1.0
-  #warning Using lj_sigma = 1.0
+  //#warning Using lj_sigma = 1.0
 #endif
 
 #ifndef LJ_EPSILON
   #define LJ_EPSILON 1.0
-  #warning Using lj_epsilon = 1.0
+  //#warning Using lj_epsilon = 1.0
 #endif
 
 #define LJ_CUTOFF 2.5

@@ -1,6 +1,6 @@
 /* Richard Darst, 2007 */
 
-#warning Note: Using 3-scale model with ***S-3S*** units
+//#warning Note: Using 3-scale model with ***S-3S*** units
 #define lambda 0.581395348837209  // 1/1.72
 
 inline double eij(int i, int j, double d) {

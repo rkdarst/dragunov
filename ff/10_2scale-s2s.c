@@ -1,4 +1,4 @@
-#warning Note: Using Force Field 2-scale Stanly-2S units.
+//#warning Note: Using Force Field 2-scale Stanly-2S units.
 #define lambda 0.571428571428571 // 4/7
 inline double eij(int i, int j, double d) {
   int x;

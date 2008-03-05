@@ -50,7 +50,7 @@ int init_mt(int seed)
 
 // Note: fij returns the force pushing particles _away_ from each other.
 //       it should basically return -(dV/dr)
-#elif FFid == 01
+#if FFid == 01
 #include "ff/01_hardsphere.c"
 
 #elif FFid == 02
@@ -59,7 +59,7 @@ int init_mt(int seed)
 #elif FFid == 03
 #include "ff/03_harmonic.c"
 
-#if FFid == 10
+#elif FFid == 10
 #include "ff/10_2scale-s2s.c"
 
 #elif FFid == 11

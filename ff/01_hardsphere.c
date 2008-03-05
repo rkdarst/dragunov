@@ -1,6 +1,6 @@
 /* Richard Darst, 2007 */
 
-#warning Note: Hard Sphere radius=.5 (diameter=1) potential
+//#warning Note: Hard Sphere radius=.5 (diameter=1) potential
 
 inline double eij(int i, int j, double d) {
   //int x;
