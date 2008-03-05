@@ -51,10 +51,10 @@ inline double fij(int i, int j, double d) {
       return (0.0);
     }
     else if (d < 1.72) {
-      return (-(-1. - 3.5)/(1.72-1.));
+      return - (-(-1. - 3.5)/(1.72-1.));
     }
     else if (d < 3.) {
-      return (-(1/(3.0-1.72))); // this is actually a triple negative
+      return - (-(1/(3.0-1.72))); // this is actually a triple negative
     }
     else {
       return(0.0);

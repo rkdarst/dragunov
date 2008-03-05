@@ -24,7 +24,8 @@ for isobarPressure in Ps:
     S = dragunov.System(N=N, beta=1/2.0,
                         boxsize=(10,10,10), trialMoveScale=.25,
                         dt=.001,
-                        isobarPressure=isobarPressure)
+                        isobarPressure=isobarPressure,
+                        forceField="lennardjones")
     #S.setMoveProb(shift=N, pressure=1)  # done automatically now
     pairlist = False
     S.fillRandom()

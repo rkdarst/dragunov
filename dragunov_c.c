@@ -46,30 +46,30 @@ int init_mt(int seed)
   return(0);
 }
 
-// #define FFid 3 // Don't do it here, use -D FFid=X on the command line.
+// #use -D FFid=X on the command line.
 
 // Note: fij returns the force pushing particles _away_ from each other.
 //       it should basically return -(dV/dr)
-#if FFid == 1
-#include "ff/2scale-s2s.c"
+#elif FFid == 01
+#include "ff/01_hardsphere.c"
 
-#elif FFid == 2 // this is 3 scale in uniform units
-#error not done yet
+#elif FFid == 02
+#include "ff/02_lennardjones.c"
 
-#elif FFid == 3
-#include "ff/3scale-s2s.c"
+#elif FFid == 03
+#include "ff/03_harmonic.c"
 
-#elif FFid == 4
-#include "ff/3scale-s3s.c"
+#if FFid == 10
+#include "ff/10_2scale-s2s.c"
 
-#elif FFid == 5
-#include "ff/hardsphere.c"
+#elif FFid == 11
+#include "ff/11_3scale-s3s.c"
 
-#elif FFid == 6
-#include "ff/lennardjones.c"
+#elif FFid == 12
+#include "ff/12_3scale-s2s.c"
 
-#elif FFid == 7
-#include "ff/ho.c"
+/* #elif FFid == 2 // this is 3 scale in uniform units */
+/* #error not done yet */
 
 #else
 #error No Forcefield selected!

@@ -12,7 +12,8 @@ N = 200
 #N = 2
 S = dragunov.System(N=N, beta=1/2.0,
                     boxsize=(10,10,10), trialMoveScale=.25,
-                    dt=.001)
+                    dt=.001,
+                    forceField="lennardjones")
 pairlist = False
 if pairlist: S.flags |= SVD_USE_PAIRLIST
 S.fillRandom()
@@ -37,7 +38,7 @@ while True:
         S.resetStatistics()
     #S.trialMove(verbose=False, n=skip)
 
-    ke = dragunov.c_mdStep(S.SD_p, skip, 0)
+    ke = S.C.mdStep(S.SD_p, skip, 0)
     if pairlist: S.pairlistCheck(2.75)
     #S.widomInsert()
     if i % 100 == 0:

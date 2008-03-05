@@ -115,69 +115,95 @@ SimData_p = ctypes.POINTER(SimData)
 # make enough sense out of it by just glancing at it, to really
 # understand look at the ctypes docs.
 
-dragunov_c = numpy.ctypeslib.load_library('dragunov_c',
-                                          os.path.dirname(__file__))
+CLibraryLookup = { }
+ForceFields = {
+    "hardsphere": 1,
+    "lennardjones": 2,
+    "harmonic": 3,
+    "2scale-s2s": 10,
+    "3scale-s3s": 11,
+    "3scale-s2s": 12,
+    }
+def getCLibrary(forceField):
+    """Return the C library corresponding to this force field.
 
-c_eij = dragunov_c.eij
-dragunov_c.eij.restype = ctypes.c_double
-dragunov_c.eij.argtypes = (ctypes.c_int,
-                           ctypes.c_int,
-                           ctypes.c_double, )
-
-c_energy_i = dragunov_c.energy_i
-c_energy_i.restype = ctypes.c_double
-c_energy_i.argtypes = (SimData_p,       # qdata_p
-                       ctypes.c_int,    # i
-                       ctypes.c_int)    # flags
-
-c_energy = dragunov_c.energy
-c_energy.restype = ctypes.c_double
-c_energy.argtypes = (SimData_p,       # qdata_p
-                     ctypes.c_int)    # flags
-
-c_integrate = dragunov_c.integrate
-c_integrate.restype = ctypes.c_double
-c_integrate.argtypes = (SimData_p,       # qdata_p
-                        ctypes.c_int)    # flags
-
-c_mdStep = dragunov_c.mdStep
-c_mdStep.restype = ctypes.c_double
-c_mdStep.argtypes = (SimData_p,       # qdata_p
-                     ctypes.c_int,    # n, number of moves
-                     ctypes.c_int)    # flags
-
-c_trialMove = dragunov_c.trialMove
-c_trialMove.restype = ctypes.c_int
-c_trialMove.argtypes = (SimData_p,       # qdata_p
-                        ctypes.c_int,    # n, number of moves
-                        ctypes.c_int)    # flags
-
-c_forcedotr_i = dragunov_c.forcedotr_i
-c_forcedotr_i.restype = ctypes.c_double
-c_forcedotr_i.argtypes = (SimData_p,       # qdata_p
-                          ctypes.c_int,    # i
-                          ctypes.c_int)    # flags
-
-c_calcForce = dragunov_c.calcForce
-c_calcForce.restype = ctypes.c_double    # always returns zero
-c_calcForce.argtypes = (SimData_p,       # qdata_p
-                        ctypes.c_int)    # flags
-
-c_pairlistInit = dragunov_c.pairlistInit
-c_pairlistInit.restype = ctypes.c_int
-c_pairlistInit.argtypes = (SimData_p,       # SimData_p
-                           ctypes.c_double, # cutoff
+    
+    """
+    if not ForceFields.has_key(forceField):
+        print "unknown forcefield:", forceField
+    if not CLibraryLookup.has_key(forceField):
+        # add it to the dict
+        num = ForceFields[forceField]
+        dragunov_c = loadCLibrary(filename="dragunov_%02d_c"%num)
+        CLibraryLookup[forceField] = dragunov_c
+    return CLibraryLookup[forceField]
+def loadCLibrary(filename='dragunov_c',
+                 path=os.path.dirname(__file__)):
+        
+    dragunov_c = numpy.ctypeslib.load_library('dragunov_c',
+                                              os.path.dirname(__file__))
+    
+    c_eij = dragunov_c.eij
+    dragunov_c.eij.restype = ctypes.c_double
+    dragunov_c.eij.argtypes = (ctypes.c_int,
+                               ctypes.c_int,
+                               ctypes.c_double, )
+    
+    c_energy_i = dragunov_c.energy_i
+    c_energy_i.restype = ctypes.c_double
+    c_energy_i.argtypes = (SimData_p,       # qdata_p
+                           ctypes.c_int,    # i
                            ctypes.c_int)    # flags
-
-c_pairlistCheck = dragunov_c.pairlistCheck
-c_pairlistCheck.restype = ctypes.c_int
-c_pairlistCheck.argtypes = (SimData_p,       # SimData_p
-                            ctypes.c_double, # warn
+    
+    c_energy = dragunov_c.energy
+    c_energy.restype = ctypes.c_double
+    c_energy.argtypes = (SimData_p,       # qdata_p
+                         ctypes.c_int)    # flags
+    
+    c_integrate = dragunov_c.integrate
+    c_integrate.restype = ctypes.c_double
+    c_integrate.argtypes = (SimData_p,       # qdata_p
                             ctypes.c_int)    # flags
-
-
-dragunov_c.init_gen_rand.restype = None
-dragunov_c.init_mt(10)
+    
+    c_mdStep = dragunov_c.mdStep
+    c_mdStep.restype = ctypes.c_double
+    c_mdStep.argtypes = (SimData_p,       # qdata_p
+                         ctypes.c_int,    # n, number of moves
+                         ctypes.c_int)    # flags
+    
+    c_trialMove = dragunov_c.trialMove
+    c_trialMove.restype = ctypes.c_int
+    c_trialMove.argtypes = (SimData_p,       # qdata_p
+                            ctypes.c_int,    # n, number of moves
+                            ctypes.c_int)    # flags
+    
+    c_forcedotr_i = dragunov_c.forcedotr_i
+    c_forcedotr_i.restype = ctypes.c_double
+    c_forcedotr_i.argtypes = (SimData_p,       # qdata_p
+                              ctypes.c_int,    # i
+                              ctypes.c_int)    # flags
+    
+    c_calcForce = dragunov_c.calcForce
+    c_calcForce.restype = ctypes.c_double    # always returns zero
+    c_calcForce.argtypes = (SimData_p,       # qdata_p
+                            ctypes.c_int)    # flags
+    
+    c_pairlistInit = dragunov_c.pairlistInit
+    c_pairlistInit.restype = ctypes.c_int
+    c_pairlistInit.argtypes = (SimData_p,       # SimData_p
+                               ctypes.c_double, # cutoff
+                               ctypes.c_int)    # flags
+    
+    c_pairlistCheck = dragunov_c.pairlistCheck
+    c_pairlistCheck.restype = ctypes.c_int
+    c_pairlistCheck.argtypes = (SimData_p,       # SimData_p
+                                ctypes.c_double, # warn
+                                ctypes.c_int)    # flags
+    
+    
+    dragunov_c.init_gen_rand.restype = None
+    dragunov_c.init_mt(10)
+    return dragunov_c
 
 class System(object):
     """Simulation Object.
@@ -200,9 +226,9 @@ class System(object):
         return 1 / self.beta
     T = property(fget=_temperature_get)
 
-    def __init__(self, N, beta=1., Nmax=None, boxsize=(10,10,10),
-                 trialMoveScale=.25,
-                 trialMoveIsobaricScale=.25,
+    def __init__(self, N, forceField,
+                 beta=1., Nmax=None, boxsize=(10,10,10),
+                 trialMoveScale=.25, trialMoveIsobaricScale=.25,
                  isobarPressure=None,
                  dt=.01):
         """All initilization
@@ -217,6 +243,7 @@ class System(object):
         python object (self) and in the SimData structure (self.SD)
         for access in C.  Be aware of keeping them both updated!
         """
+        self.C = getCLibrary(forceField)
         if Nmax == None:
             Nmax = N+50
         SD =      self.SD = SimData()
@@ -346,7 +373,7 @@ class System(object):
         #    E += c_energy_i(self.SD_p, i, SVD_ENERGYI_PARTIAL)
         #    #E+= self.energy_i(i, partial=True)
         #return E
-        return c_energy(self.SD_p, 0)
+        return self.C.energy(self.SD_p, 0)
 
     #def energy_fromi(self):
     #    """Return total energy by using sum of cached values for each atom"""
@@ -380,7 +407,7 @@ class System(object):
         flags = self.flags
         if partial:
             flags = flags | SVD_ENERGYI_PARTIAL
-        E = c_energy_i(self.SD_p, i, flags)
+        E = self.C.energy_i(self.SD_p, i, flags)
         return E
     energy_i = energy_i_c # select which energ eval function to use
 
@@ -389,14 +416,15 @@ class System(object):
 
         This must be done before self.force will be updated.
         """
-        c_calcForce(self.SD_p, self.flags)
+        self.C.calcForce(self.SD_p, self.flags)
     def pressure_c(self, add=False):
         flags = self.flags
         flags = flags | SVD_ENERGYI_PARTIAL
         fdotr = 0
+        forcedotr_i = self.C.forcedotr_i
         
         for i in range(0, self.N-1):
-            fdotr += c_forcedotr_i(self.SD_p, i, flags)
+            fdotr += forcedotr_i(self.SD_p, i, flags)
         volume = self.volume
         dimensions = 3
                  # v-- should be "+" for LJ correct results
@@ -470,7 +498,7 @@ class System(object):
     def trialMove_c(self, n=1, verbose=False):
         """Try n moves using metropolis criteria, using C function"""
         # flags: 4 = verbose
-        naccept = c_trialMove(self.SD_p, n, self.flags)
+        naccept = self.C.trialMove(self.SD_p, n, self.flags)
         self.ntry += n
         self.ntry_last = n
         self.naccept += naccept
@@ -636,8 +664,9 @@ class System(object):
     def checkIntersected(self):
         # self-test function (not used)
         partial = 1
+        energy_i = self.C.energy_i
         for i in xrange(self.N):
-            c_energy_i(self.SD_p, i, partial|2)
+            energy_i(self.SD_p, i, partial|2)
     def checkEnergyConsistency(self):
         """Check of energy self-consistency.
 
@@ -681,10 +710,10 @@ class System(object):
         """Initilize th
         """
         flags = self.flags
-        return c_pairlistInit(self.SD_p, cutoff, flags)
+        return self.C.pairlistInit(self.SD_p, cutoff, flags)
         
     def pairlistCheck(self, warn, strict=True):
-        nviolations = c_pairlistCheck(self.SD_p, warn, self.flags)
+        nviolations = self.C.pairlistCheck(self.SD_p, warn, self.flags)
         if nviolations:
             print "nviolatios:", nviolations, "at step", self.ntry
         if strict:
@@ -983,7 +1012,7 @@ if __name__ == "__main__":
             print S.force[:N]
             print S.forceFromNDeriv()[:N]
             print
-            ke = c_mdStep(S.SD_p, skip, 0)
+            ke = S.C.mdStep(S.SD_p, skip, 0)
             S.display()
             #print >> logfile, i, S.T, S.density, S.energy(), \
             #      S.pressure(add=True), S.pressureAverage(), ke
@@ -1018,7 +1047,7 @@ if __name__ == "__main__":
                 S.resetStatistics()
             #S.trialMove(verbose=False, n=skip)
 
-            ke = c_mdStep(S.SD_p, skip, 0)
+            ke = S.C.mdStep(S.SD_p, skip, 0)
             if pairlist: S.pairlistCheck(2.75)
             #S.widomInsert()
             S.display()

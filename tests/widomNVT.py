@@ -23,6 +23,7 @@ for density in densities:
     S = dragunov.System(N=N, beta=1/2.0,
                         boxsize=(10,10,10), trialMoveScale=.25,
                         dt=.001,
+                        forceField="lennardjones",
                         )
     S.fillRandom()
     S.removeOverlaps(10.)

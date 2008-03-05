@@ -21,7 +21,8 @@ for density in tests:
 
     S = dragunov.System(N=N, beta=1/2.0,
                         boxsize=(10,10,10), trialMoveScale=.25,
-                        dt=.001)
+                        dt=.001,
+                        forceField="lennardjones")
     pairlist = True
     #if pairlist: S.flags |= dragunov.SVD_USE_PAIRLIST
     S.fillRandom()
