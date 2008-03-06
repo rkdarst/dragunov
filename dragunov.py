@@ -146,10 +146,16 @@ def loadCLibrary(filename,
     
     c_eij = dragunov_c.eij
     dragunov_c.eij.restype = ctypes.c_double
-    dragunov_c.eij.argtypes = (ctypes.c_int,
-                               ctypes.c_int,
-                               ctypes.c_double, )
-    
+    dragunov_c.eij.argtypes = (ctypes.c_int,        # atomtype of i
+                               ctypes.c_int,        # atomtype of j
+                               ctypes.c_double, )   # distance
+
+    c_fij = dragunov_c.fij
+    dragunov_c.fij.restype = ctypes.c_double
+    dragunov_c.fij.argtypes = (ctypes.c_int,        # atomtype of i
+                               ctypes.c_int,        # atomtype of j
+                               ctypes.c_double, )   # distance
+
     c_energy_i = dragunov_c.energy_i
     c_energy_i.restype = ctypes.c_double
     c_energy_i.argtypes = (SimData_p,       # qdata_p
@@ -226,6 +232,12 @@ class System(object):
     def _temperature_get(self):
         return 1 / self.beta
     T = property(fget=_temperature_get)
+    def _qdot_get(self):
+        # warning: this doesn't yield the KE centered at this point,
+        # that should be (q(t+1) + q(t-1))/(2duut), not
+        # (q(t)-q(t-1))/dt (see the integrate method)
+        return (self.q - self.qold) / self.dt
+    qdot = property(fget=_qdot_get)
 
     def __init__(self, N, forceField,
                  beta=1., Nmax=None, boxsize=(10,10,10),
@@ -337,6 +349,12 @@ class System(object):
         dragunov is designed for, really.)
         """
         self.qold[:] = self.q[:]
+    def dij(self, i, j):
+        d = self.q[i] - self.q[j]
+        d = numpy.abs(d - (numpy.floor(d/self.boxsize + .5)) * self.boxsize)
+        d = numpy.sqrt((d*d).sum())  # distances from i to j
+        return d
+
     def eij(self, i, j, dij):
         """Energy of interaction between atomtypes i and j at distance dij"""
         if j<i:   j,i = i,j  # make i the lower index

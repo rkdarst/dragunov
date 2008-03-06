@@ -51,10 +51,11 @@ inline double fij(int i, int j, double d) {
       return (0.0);
     }
     else if (d < 1.72) {
-      return - (-(-1. - 3.5)/(1.72-1.));
+      // these definitely have the right signs -- no other negatives.
+      return (-(-1. - 3.5)/(1.72-1.));  // 6.25
     }
-    else if (d < 3.) {
-      return - (-(1/(3.0-1.72))); // this is actually a triple negative
+    else if (d < 3.) {                  // -.78125
+      return (-(1/(3.0-1.72))); // this is actually a triple negative
     }
     else {
       return(0.0);

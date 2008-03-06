@@ -17,6 +17,7 @@ for density in tests:
     print "density:", density
     N = int(density * 1000)
     logname = "tests/lj-pressure/"+"logfile-density=%s.txt"%density
+    #logname = "logfile.txt"
     logfile = file(logname, "w")
 
     S = dragunov.System(N=N, beta=1/2.0,
