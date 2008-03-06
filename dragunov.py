@@ -51,9 +51,14 @@ import numpy
 numpy.random.seed(123456)
 try:
     import visual
-except:
-    # display won't work, but no error raised.
-    pass
+except ImportError:
+    # display won't work, but no error raised.  The visual functions
+    # will detect that the module wasn't imported, and silently
+    # return.  This makes it easier to run jobs on clusters with no
+    # modifications.
+    # This could be exploited by doing `dragunov.visual = None` to
+    # explicitely deactivate it.
+    visual = None
 try:
     from rkddp.interact import interact
 except ImportError:
@@ -774,6 +779,8 @@ class System(object):
 
         Requires python-visual to be installed.  Call this function
         again to update positions"""
+        if visual is None:
+            return
         q = self.qWrapped()
         c = {0: visual.color.white,
              1: visual.color.green,
@@ -791,6 +798,9 @@ class System(object):
                 display[i].pos = q[i]
     def makebox(self):
         """Put the simulation box on the visual display"""
+        if visual is None:
+            print "visual module was not imported, visual siletly deactivated."
+            return
         visual.scene.center = self.boxsize / 2.
         radius = .02
         x,y,z = self.boxsize
