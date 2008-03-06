@@ -123,6 +123,7 @@ ForceFields = {
     "2scale-s2s": 10,
     "3scale-s3s": 11,
     "3scale-s2s": 12,
+    "2scale-jagla98": 13,
     }
 def getCLibrary(forceField):
     """Return the C library corresponding to this force field.
@@ -137,10 +138,10 @@ def getCLibrary(forceField):
         dragunov_c = loadCLibrary(filename="dragunov_%02d_c"%num)
         CLibraryLookup[forceField] = dragunov_c
     return CLibraryLookup[forceField]
-def loadCLibrary(filename='dragunov_c',
+def loadCLibrary(filename,
                  path=os.path.dirname(__file__)):
         
-    dragunov_c = numpy.ctypeslib.load_library('dragunov_c',
+    dragunov_c = numpy.ctypeslib.load_library(filename,
                                               os.path.dirname(__file__))
     
     c_eij = dragunov_c.eij

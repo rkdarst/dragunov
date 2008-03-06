@@ -1,5 +1,5 @@
 
-for i in 01 02 03 10 11 12 ; do 
+for i in 01 02 03 10 11 12 13 ; do 
 
 extra="-DFFid=$i"
 echo compiling: "$extra"

@@ -68,6 +68,9 @@ int init_mt(int seed)
 #elif FFid == 12
 #include "ff/12_3scale-s2s.c"
 
+#elif FFid == 13
+#include "ff/13_2scale-jagla98.c"
+
 /* #elif FFid == 2 // this is 3 scale in uniform units */
 /* #error not done yet */
 
