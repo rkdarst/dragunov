@@ -13,18 +13,18 @@ skip = 100
 Nsteps = 1000000
 isobarPressure = 1.0
 Ps = (.25, .5, 1., 2., 4.)
+Ps = (1., )
 
 
-for isobarPressure in Ps:
-    #logname = "logfile.txt"
-    logname = "tests/isobaric/logfile-P=%s.txt"%isobarPressure
+for isobaricPressure in Ps:
+    logname = "tests/isobaric/logfile-P=%s.txt"%isobaricPressure
+    logname = "logfile-isobaric.txt"
     logfile = file(logname, "w")
     
     i = 0
     S = dragunov.System(N=N, beta=1/2.0,
                         boxsize=(10,10,10), trialMoveScale=.25,
-                        dt=.001,
-                        isobarPressure=isobarPressure,
+                        isobaricPressure=isobaricPressure,
                         forceField="lennardjones")
     #S.setMoveProb(shift=N, pressure=1)  # done automatically now
     pairlist = False
@@ -39,7 +39,9 @@ for isobarPressure in Ps:
     #                    1  2  3  4    5  6  7     8  9     10
     print >> logfile, "# i, T, N, rho, E, P, Pavg, V, Vavg, rho_avg"
     while i <= Nsteps:
-        #if i%10 and pairlist: S.pairlistInit(3.25)
+        if i%1000 == 0 and pairlist:
+            S.pairlistCheck(2.75)
+            S.pairlistInit(3.25)
         i += skip
         if i == 250000:
             S.resetStatistics()
@@ -59,7 +61,6 @@ for isobarPressure in Ps:
         sys.stdout.flush()
         
         #print S.pairlist
-        #S.pairlistCheck(strict=False)
         logfile.flush()
         #time.sleep(.5)
         #print

@@ -4,8 +4,10 @@ for i in 01 02 03 10 11 12 13 ; do
 extra="-DFFid=$i"
 echo compiling: "$extra"
 
-gcc $* $extra -Wall -O2 -shared -fPIC -c dragunov_c.c
-gcc -Wall -O2 -shared -fPIC -c -DMEXP=19937 -include SFMT-params.h SFMT.c
+opts="-O3 -Wall -shared -fPIC"
+
+gcc $* $extra $opts -c dragunov_c.c
+gcc $opts -c -DMEXP=19937 -include SFMT-params.h SFMT.c
 
 # With icc instead of gcc:
 #icc -Wall -O2 -shared -fPIC -c dragunov_c.c

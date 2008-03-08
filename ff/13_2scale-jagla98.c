@@ -2,7 +2,7 @@
 //Note to richard: (see paper J3, my notebook p35)
 //#define lambda 0.606060606060606q // 1/1.65
 
-# define GAMMA 1.76
+#define GAMMA 1.76
 
 // This was derived from 10_2scale-s2s
 inline double eij(int i, int j, double d) {
