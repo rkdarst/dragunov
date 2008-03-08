@@ -37,7 +37,7 @@ struct SimData {
   double trialMoveIsobaricScale;
   double pairlist_minDistance;
   double prob_PMove;
-  double isobarPressure;
+  double isobaricPressure;
 } ;
 
 int init_mt(int seed)
@@ -161,8 +161,78 @@ inline void force_ij(int i, int j,    // atomtypes
   force[2] = F * r[2]/d;
   
 }
+double forcedotr_i_sub(double qi0, double qi1, double qi2,
+			      int j,
+			      double *q,
+			      double *boxsize
+			      ) {
+  double drx, dry, drz;   // vectors FROM i TO j, makes force FROM i ON j
+  double d;
+  d = 0;
+  
+  drx = q[j*3  ] - qi0 ;
+  drx -= floor((drx/boxsize[0] + .5) ) * boxsize[0];
+  d += drx*drx;
+  //if (d>1) return(0);  // greater than cutoff^2
 
+  dry = q[j*3+1] - qi1 ;
+  dry -= floor((dry/boxsize[1] + .5) ) * boxsize[1];
+  d += dry*dry;
+  //if (d>1) return(0);  // greater than cutoff^2
+
+  drz = q[j*3+2] - qi2 ;
+  drz -= floor((drz/boxsize[2] + .5) ) * boxsize[2];
+  d += drz*drz;
+  //if (d>1) return(0);  // greater than cutoff^2
+
+  d = sqrt(d);
+  return(d);
+}
 double forcedotr_i(struct SimData *SD,
+		   int i,
+		   int flags
+		   ) {
+  // defaults to using all of them
+  double fdotr=0;
+  int j=0;
+  int partial;
+  double *q = SD->q;
+  double *boxsize = SD->boxsize;
+  
+  int usePairlist = flags & SVD_USE_PAIRLIST;
+  partial = flags & SVD_ENERGYI_PARTIAL; // defaults to all
+  if (partial) j=i+1;
+
+  double qi0 = SD->q[i*3  ];
+  double qi1 = SD->q[i*3+1];
+  double qi2 = SD->q[i*3+2];
+  //printf("%f %f %f\n", qi0, qi1, qi2);
+  if (usePairlist) {
+    // pairlist
+    int ni = SD->pairlist[i*pairsRowsize];
+    for (ni -= 1;  ni>=0;  ni-- ) {
+      j = SD->pairlist[i*pairsRowsize + 2 + ni];
+      if (SVD_ENERGYI_PARTIAL && j <= i)
+	continue;
+      double d = distance(q, boxsize, i, j);
+      double F = fij(SD->atomtypes[i], SD->atomtypes[j], d);
+      fdotr += F * d ;
+    }
+  } else {
+    // NO pairlist
+    for (; j<SD->N ; j++ ) {
+      if (i == j) continue;
+      double d = forcedotr_i_sub(qi0, qi1, qi2, j, SD->q, SD->boxsize);
+      double F = fij(SD->atomtypes[i], SD->atomtypes[j], d);
+      fdotr += F * d ;
+    }
+  }
+  if (flags&SVD_VERBOSE_1) {
+    CHECK;
+  }
+  return(fdotr);
+}
+/*double forcedotr_i(struct SimData *SD,
 		   int i,
 		   int flags
 		   ) {
@@ -213,6 +283,24 @@ double forcedotr_i(struct SimData *SD,
 
   }
   //printf("E = %f\n", E);
+  return(fdotr);
+}*/
+double forcedotr_total(struct SimData *SD,
+		       int flags
+		       ) {
+  /*
+   * for i in range(0, self.N-1):
+   *     fdotr += forcedotr_i(self.SD_p, i, flags)
+   */
+  int i;
+  double fdotr=0.;
+
+  flags |= SVD_ENERGYI_PARTIAL;
+
+  // This is supposed to be N-1, since the last atom is N.
+  for(i=0 ; i < (SD->N)-1 ; i++) {
+    fdotr += forcedotr_i(SD, i, flags);
+  }
   return(fdotr);
 }
 
@@ -370,7 +458,7 @@ double pressure_c(struct SimData *SD, int flags) {
 }
 
 
-int trialMove_isobaric(struct SimData *SD);
+int trialMove_isobaric(struct SimData *SD, int flags);
 int trialMove(struct SimData *SD, int n, int flags) {
   /* Run N monte carlo trial moves, return number of moves accepted */
   double qi_old[3];
@@ -383,7 +471,7 @@ int trialMove(struct SimData *SD, int n, int flags) {
     /* What type of move do we need to do? */
     ran = genrand_real2(); /* on [0,1) */
     if (ran < SD->prob_PMove) {
-      trialMove_isobaric(SD);
+      trialMove_isobaric(SD, flags);
       continue;
     }
     
@@ -432,7 +520,7 @@ int trialMove(struct SimData *SD, int n, int flags) {
   } // end loop over n, 
   return(naccept);
 }
-int trialMove_isobaric(struct SimData *SD) {
+int trialMove_isobaric(struct SimData *SD, int flags) {
   int i;
   double *q = SD->q;
   double *boxsize = SD->boxsize;
@@ -440,10 +528,10 @@ int trialMove_isobaric(struct SimData *SD) {
 
   //def trialMove_isobaric_py(self, pressure, lnVScale):
   double lnVScale = SD->trialMoveIsobaricScale;
-  double pressure = SD->isobarPressure;
+  double pressure = SD->isobaricPressure;
 
   double Vold = boxsize[0] * boxsize[1] * boxsize[2];
-  double Eold = energy(SD, 0);
+  double Eold = energy(SD, flags);
 
   //#Vnew = exp(ln(V + (random.random()-.5) * scale))
   //#lengthscale = (Vnew / Vold)**(1./3.) # this may not be right
@@ -458,7 +546,7 @@ int trialMove_isobaric(struct SimData *SD) {
   //self.boxsize *= linearScale
   boxsize[0]*=linearScale; boxsize[1]*=linearScale; boxsize[2]*=linearScale;
 
-  double Enew = energy(SD, 0);
+  double Enew = energy(SD, flags);
   double Vnew = Vold * volumeScale;
 
 
@@ -487,6 +575,10 @@ int trialMove_isobaric(struct SimData *SD) {
     }
     //self.boxsize /= linearScale;
     boxsize[0]/=linearScale; boxsize[1]/=linearScale; boxsize[2]/=linearScale;
+  }
+  if (flags & SVD_VERBOSE_1 || 1) {
+      printf("Isobaric move accept=%d, vs=%f, x=%f, Eold/new=%.3f %.3f\n", accept, volumeScale, x, Eold, Enew);
+
   }
   return(0);
 }

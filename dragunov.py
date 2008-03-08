@@ -111,7 +111,7 @@ class SimData(ctypes.Structure):
                 ("trialMoveIsobaricScale", ctypes.c_double),
                 ("pairlist_minDistance", ctypes.c_double),
                 ("prob_PMove", ctypes.c_double),
-                ("isobarPressure", ctypes.c_double),
+                ("isobaricPressure", ctypes.c_double),
                 ]
 SimData_p = ctypes.POINTER(SimData)
 
@@ -194,7 +194,12 @@ def loadCLibrary(filename,
     c_forcedotr_i.argtypes = (SimData_p,       # qdata_p
                               ctypes.c_int,    # i
                               ctypes.c_int)    # flags
-    
+
+    c_forcedotr_total = dragunov_c.forcedotr_total
+    c_forcedotr_total.restype = ctypes.c_double
+    c_forcedotr_total.argtypes = (SimData_p,       # SimData_p
+                                  ctypes.c_int)    # flags
+
     c_calcForce = dragunov_c.calcForce
     c_calcForce.restype = ctypes.c_double    # always returns zero
     c_calcForce.argtypes = (SimData_p,       # qdata_p
@@ -246,8 +251,8 @@ class System(object):
 
     def __init__(self, N, forceField,
                  beta=1., Nmax=None, boxsize=(10,10,10),
-                 trialMoveScale=.25, trialMoveIsobaricScale=.25,
-                 isobarPressure=None,
+                 trialMoveScale=.25, trialMoveIsobaricScale=.10,
+                 isobaricPressure=None,
                  dt=.01):
         """All initilization
 
@@ -278,10 +283,11 @@ class System(object):
         self.mu_dict = { }
         self._pressureList = [ ]
         self._volumeList   = [ ]
-        if isobarPressure:
-            SD.isobarPressure = self.isobarPressure = isobarPressure
+        if isobaricPressure:
+            SD.isobaricPressure = self.isobaricPressure = isobaricPressure
             # default to 1 V move for every N+1 steps
-            self.setMoveProb(shift=self.N, volume=1)
+            self.setMoveProb(shift=self.N, isobaric=1)
+            print "info: setting to isobaric ensemble (NPT)"
 
         self.naccept = 0
         self.ntry = 0
@@ -397,7 +403,7 @@ class System(object):
         #    E += c_energy_i(self.SD_p, i, SVD_ENERGYI_PARTIAL)
         #    #E+= self.energy_i(i, partial=True)
         #return E
-        return self.C.energy(self.SD_p, 0)
+        return self.C.energy(self.SD_p, self.flags)
 
     #def energy_fromi(self):
     #    """Return total energy by using sum of cached values for each atom"""
@@ -444,11 +450,16 @@ class System(object):
     def pressure_c(self, add=False):
         flags = self.flags
         flags = flags | SVD_ENERGYI_PARTIAL
-        fdotr = 0
-        forcedotr_i = self.C.forcedotr_i
+        #fdotr = 0
+        #forcedotr_i = self.C.forcedotr_i
+        #
+        #for i in range(0, self.N-1):
+        #    fdotr += forcedotr_i(self.SD_p, i, flags)
+        #print "orig fdotr:", fdotr
+
+        fdotr = self.C.forcedotr_total(self.SD_p, flags)
+        #print "fdotr:", fdotr
         
-        for i in range(0, self.N-1):
-            fdotr += forcedotr_i(self.SD_p, i, flags)
         volume = self.volume
         dimensions = 3
                  # v-- should be "+" for LJ correct results
@@ -590,7 +601,7 @@ class System(object):
         pass
     mu = widomInsertResults
 
-    def setMoveProb(self, shift, volume=0):
+    def setMoveProb(self, shift, isobaric=0):
         """Set trial move probabilities
 
         If we are doing an ensemble like NTP, we need to do both
@@ -609,10 +620,10 @@ class System(object):
         so that a pressure move is done on average once for every N
         shifts.
         """
-        sum_ = shift + volume
-        self.SD.prob_PMove = self.prob_PMove = volume / sum_
+        sum_ = shift + isobaric
+        self.SD.prob_PMove = self.prob_PMove = isobaric / sum_
         
-    def trialMove_isobaric_py(self, pressure, lnVScale):
+    def trialMove_isobaric_py(self):
         """Volume-adjusting move for the isobaric ensemble.
 
         Do a random walk in `ln(V)`, maintaining a constant pressure.
@@ -621,6 +632,8 @@ class System(object):
         isn't used anymore.
         """
         numpy.product(self.boxsize)
+        pressure = self.isobaricPressure
+        lnVScale = self.trialMoveIsobaricScale
 
         Vold = self.volume
         Eold = self.energy()
@@ -736,7 +749,7 @@ class System(object):
         flags = self.flags
         return self.C.pairlistInit(self.SD_p, cutoff, flags)
         
-    def pairlistCheck(self, warn, strict=True):
+    def pairlistCheck(self, warn, strict=False):
         nviolations = self.C.pairlistCheck(self.SD_p, warn, self.flags)
         if nviolations:
             print "nviolatios:", nviolations, "at step", self.ntry
