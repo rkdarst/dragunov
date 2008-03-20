@@ -476,18 +476,10 @@ class System(object):
         return sum(self._pressureList)/len(self._pressureList)
     def volumeAverage(self):
         return sum(self._volumeList)/len(self._volumeList)
-    def pressureTrialMove(self):
-        # get current pressure
-        # trial boxsize change
-        # - our current size-scalar is L
-        # - we need to make a reversible random move,
-        #   (random number .9 to 1 and .5 chance of inverting?)
-        #
-        pass
 
     def trialMove_py(self, verbose=False):
         """Try a move using metropolis criteria"""
-
+        raise Exception, "Function fallen out of sync with the C version."
 
 
 
