@@ -112,6 +112,14 @@ class SimData(ctypes.Structure):
                 ("pairlist_minDistance", ctypes.c_double),
                 ("prob_PMove", ctypes.c_double),
                 ("isobaricPressure", ctypes.c_double),
+                ("ntry_shift",            ctypes.c_int),
+                ("naccept_shift",         ctypes.c_int),
+                ("ntry_shift_last",       ctypes.c_int),
+                ("naccept_shift_last",    ctypes.c_int),
+                ("ntry_isobaric",         ctypes.c_int),
+                ("naccept_isobaric",      ctypes.c_int),
+                ("ntry_isobaric_last",    ctypes.c_int),
+                ("naccept_isobaric_last", ctypes.c_int),
                 ]
 SimData_p = ctypes.POINTER(SimData)
 
@@ -276,6 +284,8 @@ class System(object):
         SD.dt =     self.dt   =   dt
         SD.beta =   self.beta =   beta
         SD.prob_PMove = self.prob_PMove = 0
+        self.mcsteps = 0
+        self.mctime = 0
 
         SD.trialMoveScale = self.trialMoveScale = trialMoveScale
         SD.trialMoveIsobaricScale = self.trialMoveIsobaricScale = \
@@ -291,6 +301,15 @@ class System(object):
 
         self.naccept = 0
         self.ntry = 0
+        self.SD.ntry_shift            = 0
+        self.SD.naccept_shift         = 0
+        self.SD.ntry_shift_last       = 0
+        self.SD.naccept_shift_last    = 0
+        self.SD.ntry_isobaric         = 0
+        self.SD.naccept_isobaric      = 0
+        self.SD.ntry_isobaric_last    = 0
+        self.SD.naccept_isobaric_last = 0
+
 
         # numpy.float is ctype double
         self.q = numpy.zeros(shape=(self.Nmax, 3), dtype=numpy.float)
@@ -320,14 +339,56 @@ class System(object):
         self._pressureList = [ ]
         self._volumeList   = [ ]
         self.mu_dict = { }
-
-
-    def acceptRatio(self):
+        self.SD.ntry_shift_last       = self.SD.ntry_shift
+        self.SD.naccept_shift_last    = self.SD.naccept_shift
+        self.SD.ntry_isobaric_last    = self.SD.ntry_isobaric
+        self.SD.naccept_isobaric_last = self.SD.naccept_isobaric
+    def resetTime(self):
+        """Set MC time and MC steps to zero.
+        """
+        self.mcsteps = 0
+        self.mctime = 0
+    def acceptRatioShift(self):
         """Return MC acceptance ratio"""
-        return self.naccept / self.ntry
-    def acceptRatio_last(self):
-        """Return MC acceptance ratio of the last series of trial moves."""
-        return self.naccept_last / self.ntry_last
+        if self.SD.ntry_shift == 0:
+            return float("nan")
+        return self.SD.naccept_shift / self.SD.ntry_shift
+    def acceptRatioShiftLast(self):
+        """Return MC acceptance ratio"""
+        if self.SD.ntry_shift    - self.SD.ntry_shift_last == 0:
+            return float("nan")
+        return ((self.SD.naccept_shift - self.SD.naccept_shift_last) /
+                (self.SD.ntry_shift    - self.SD.ntry_shift_last))
+    def acceptRatioIsobaric(self):
+        """Return MC acceptance ratio"""
+        if self.SD.ntry_isobaric == 0:
+            return float("nan")
+        return self.SD.naccept_isobaric / self.SD.ntry_isobaric
+    def acceptRatioIsobaricLast(self):
+        """Return MC acceptance ratio"""
+        if self.SD.ntry_isobaric    - self.SD.ntry_isobaric_last == 0:
+            return float("nan")
+        return ((self.SD.naccept_isobaric - self.SD.naccept_isobaric_last) /
+                (self.SD.ntry_isobaric    - self.SD.ntry_isobaric_last))
+    def loginfo(self, fileobject=None):
+        if fileobject is None:
+            fileobject = sys.stdout
+        print >> "# mcsteps mctime T N rho E P Pavg, V, Vavg, rho_avg, mu"
+    
+    def log(self, fileobject, pressure=True,):
+        print >> fileobject, self.mcsteps, self.mctime, self.T, self.N, \
+              self.density, self.energy(), \
+              self.pressure(add=True), self.pressureAverage(), \
+              self.volume, self.volumeAverage(), \
+              self.acceptRatioShift(), self.acceptRatioShiftLast(), \
+              self.acceptRatioIsobaric(), self.acceptRatioIsobaricLast()
+        # 1       2      3 4 5       6 7 8    9 10
+        # mcsteps mctime T N density E P Pavg V Vavg
+        # 11       12            13          14
+        # AR_shift AR_shift_last AR_isobaric AR_isobaric_last
+    
+
+
     def fill(self, a=10, b=10, c=10, scale=1.):
         """Fill the box with a crystal structure"""
         for i in range(self.N):
@@ -525,11 +586,10 @@ class System(object):
     def trialMove_c(self, n=1, verbose=False):
         """Try n moves using metropolis criteria, using C function"""
         # flags: 4 = verbose
-        naccept = self.C.trialMove(self.SD_p, n, self.flags)
-        self.ntry += n
-        self.ntry_last = n
-        self.naccept += naccept
-        self.naccept_last = naccept
+        nsteps = n * self._movesPerCycle
+        naccept = self.C.trialMove(self.SD_p, nsteps, self.flags)
+        self.mcsteps += nsteps
+        self.mctime += n
         if verbose:
             print "%10s moves"%self.ntry, round(self.naccept/self.ntry, 4)
         
@@ -594,7 +654,7 @@ class System(object):
     mu = widomInsertResults
 
     def setMoveProb(self, shift, isobaric=0):
-        """Set trial move probabilities
+        """Set trial move probabilities and timescale of simulation.
 
         If we are doing an ensemble like NTP, we need to do both
         particle moves AND moves in volume-space.  This method adjusts
@@ -611,8 +671,13 @@ class System(object):
 
         so that a pressure move is done on average once for every N
         shifts.
+
+        The second part of this refers to setting the timescale of
+        simulation.  Each time trialMove is called, it'll do a number
+        of moves equal to the sum of the numbers passed here.
         """
         sum_ = shift + isobaric
+        self._movesPerCycle = sum_
         self.SD.prob_PMove = self.prob_PMove = isobaric / sum_
         
     def trialMove_isobaric_py(self):

@@ -38,6 +38,15 @@ struct SimData {
   double pairlist_minDistance;
   double prob_PMove;
   double isobaricPressure;
+
+  int ntry_shift;
+  int naccept_shift;
+  int ntry_shift_last;
+  int naccept_shift_last;
+  int ntry_isobaric;
+  int naccept_isobaric;
+  int ntry_isobaric_last;
+  int naccept_isobaric_last;
 } ;
 
 int init_mt(int seed)
@@ -518,6 +527,8 @@ int trialMove(struct SimData *SD, int n, int flags) {
       printf("%6d %d, %5.3f->%5.3f accF: %.4f\n", 
       counter1, accept, Eold, Enew, (double)naccept/ntry);*/
   } // end loop over n, 
+  SD->ntry_shift += ntry;
+  SD->naccept_shift += naccept;
   return(naccept);
 }
 int trialMove_isobaric(struct SimData *SD, int flags) {
@@ -564,8 +575,10 @@ int trialMove_isobaric(struct SimData *SD, int flags) {
     if (ran < x)  accept = 1;
     else          accept = 0;
   }
+  SD->ntry_isobaric += 1;
   if (accept) {
     //printf("+++ %.3f pressure move  +++\n", linearScale); 
+    SD->naccept_isobaric += 1;
   }
   else {
     //printf("--- %.3f pressure move  ---\n", linearScale);
@@ -576,10 +589,9 @@ int trialMove_isobaric(struct SimData *SD, int flags) {
     //self.boxsize /= linearScale;
     boxsize[0]/=linearScale; boxsize[1]/=linearScale; boxsize[2]/=linearScale;
   }
-  if (flags & SVD_VERBOSE_1 || 1) {
-      printf("Isobaric move accept=%d, vs=%f, x=%f, Eold/new=%.3f %.3f\n", accept, volumeScale, x, Eold, Enew);
-
-  }
+  //if (flags & SVD_VERBOSE_1 || 1) {
+  //    printf("Isobaric move accept=%d, vs=%f, x=%f, Eold/new=%.3f %.3f\n", accept, volumeScale, x, Eold, Enew);
+  //}
   return(0);
 }
 
