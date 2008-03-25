@@ -170,33 +170,33 @@ inline void force_ij(int i, int j,    // atomtypes
   force[2] = F * r[2]/d;
   
 }
-double forcedotr_i_sub(double qi0, double qi1, double qi2,
-			      int j,
-			      double *q,
-			      double *boxsize
-			      ) {
-  double drx, dry, drz;   // vectors FROM i TO j, makes force FROM i ON j
-  double d;
-  d = 0;
+/* double forcedotr_i_sub(double qi0, double qi1, double qi2, */
+/* 			      int j, */
+/* 			      double *q, */
+/* 			      double *boxsize */
+/* 			      ) { */
+/*   double drx, dry, drz;   // vectors FROM i TO j, makes force FROM i ON j */
+/*   double d; */
+/*   d = 0; */
   
-  drx = q[j*3  ] - qi0 ;
-  drx -= floor((drx/boxsize[0] + .5) ) * boxsize[0];
-  d += drx*drx;
-  //if (d>1) return(0);  // greater than cutoff^2
+/*   drx = q[j*3  ] - qi0 ; */
+/*   drx -= floor((drx/boxsize[0] + .5) ) * boxsize[0]; */
+/*   d += drx*drx; */
+/*   //if (d>1) return(0);  // greater than cutoff^2 */
 
-  dry = q[j*3+1] - qi1 ;
-  dry -= floor((dry/boxsize[1] + .5) ) * boxsize[1];
-  d += dry*dry;
-  //if (d>1) return(0);  // greater than cutoff^2
+/*   dry = q[j*3+1] - qi1 ; */
+/*   dry -= floor((dry/boxsize[1] + .5) ) * boxsize[1]; */
+/*   d += dry*dry; */
+/*   //if (d>1) return(0);  // greater than cutoff^2 */
 
-  drz = q[j*3+2] - qi2 ;
-  drz -= floor((drz/boxsize[2] + .5) ) * boxsize[2];
-  d += drz*drz;
-  //if (d>1) return(0);  // greater than cutoff^2
+/*   drz = q[j*3+2] - qi2 ; */
+/*   drz -= floor((drz/boxsize[2] + .5) ) * boxsize[2]; */
+/*   d += drz*drz; */
+/*   //if (d>1) return(0);  // greater than cutoff^2 */
 
-  d = sqrt(d);
-  return(d);
-}
+/*   d = sqrt(d); */
+/*   return(d); */
+/* } */
 double forcedotr_i(struct SimData *SD,
 		   int i,
 		   int flags
@@ -212,9 +212,9 @@ double forcedotr_i(struct SimData *SD,
   partial = flags & SVD_ENERGYI_PARTIAL; // defaults to all
   if (partial) j=i+1;
 
-  double qi0 = SD->q[i*3  ];
-  double qi1 = SD->q[i*3+1];
-  double qi2 = SD->q[i*3+2];
+  //double qi0 = SD->q[i*3  ];
+  //double qi1 = SD->q[i*3+1];
+  //double qi2 = SD->q[i*3+2].;
   //printf("%f %f %f\n", qi0, qi1, qi2);
   if (usePairlist) {
     // pairlist
@@ -231,69 +231,14 @@ double forcedotr_i(struct SimData *SD,
     // NO pairlist
     for (; j<SD->N ; j++ ) {
       if (i == j) continue;
-      double d = forcedotr_i_sub(qi0, qi1, qi2, j, SD->q, SD->boxsize);
+      //double d = forcedotr_i_sub(qi0, qi1, qi2, j, SD->q, SD->boxsize);
+      double d = distance(q, boxsize, i, j);
       double F = fij(SD->atomtypes[i], SD->atomtypes[j], d);
       fdotr += F * d ;
     }
   }
-  if (flags&SVD_VERBOSE_1) {
-    CHECK;
-  }
   return(fdotr);
 }
-/*double forcedotr_i(struct SimData *SD,
-		   int i,
-		   int flags
-		   ) {
-  // defaults to using all of them
-  double fdotr=0;
-  int j=0;
-  int partial;
-  
-  partial = flags & SVD_ENERGYI_PARTIAL; // defaults to all
-  if (partial) j=i+1;
-
-  double qi0 = SD->q[i*3  ];
-  double qi1 = SD->q[i*3+1];
-  double qi2 = SD->q[i*3+2];
-  //printf("%f %f %f\n", qi0, qi1, qi2);
-  for (; j<SD->N ; j++ ) {
-    //printf("%d %d\n", i, j);
-    double drx, dry, drz;   // vectors FROM i TO j, makes force FROM i ON j
-    double d;
-    if (i == j) continue;
-    d = 0;
-
-    drx = SD->q[j*3  ] - qi0 ;
-    drx -= floor((drx/SD->boxsize[0] + .5) ) * SD->boxsize[0];
-    d += drx*drx;
-    //if (d>1) return(0);  // greater than cutoff^2
-
-    dry = SD->q[j*3+1] - qi1 ;
-    dry -= floor((dry/SD->boxsize[1] + .5) ) * SD->boxsize[1];
-    d += dry*dry;
-    //if (d>1) return(0);  // greater than cutoff^2
-
-    drz = SD->q[j*3+2] - qi2 ;
-    drz -= floor((drz/SD->boxsize[2] + .5) ) * SD->boxsize[2];
-    d += drz*drz;
-    //if (d>1) return(0);  // greater than cutoff^2
-
-    d = sqrt(d);
-
-    double F;
-    F = fij(SD->atomtypes[i], SD->atomtypes[j], d);
-    //fdotr += drx*(F*drx/d)  +  dry*(F*dry/d)  +  drz*(F*drz/d);
-    fdotr += F * d ;
-
-    if (flags&SVD_VERBOSE_1) {
-      CHECK;
-    }
-
-  }
-  //printf("E = %f\n", E);
-  return(fdotr);
-}*/
 double forcedotr_total(struct SimData *SD,
 		       int flags
 		       ) {
@@ -312,6 +257,62 @@ double forcedotr_total(struct SimData *SD,
   }
   return(fdotr);
 }
+
+
+
+
+int nCloserThan(struct SimData *SD,
+		double maxdist,
+		int flags
+		) {
+  /* This function returns the number of pairs of atoms closer than
+   * the distance `maxdist`.  It is designed to be used to calculate
+   * impulsive corrections to the pressure.
+   *
+   * Things to do:
+   * - make it away of different atom types
+   * - make it take the paramaters r, dr, and calculate the histogram
+   *   bins [r, r+dr), [r, r+2dr), [r, r+3dr).  Then do a simple linear
+   *   regression to find the slope.  (maybe make it two points so that
+   *   it's easier to calculate the slope)
+   */
+  // defaults to using all of them
+  int n=0;
+  int i=0, j=0;
+  double *q = SD->q;
+  double *boxsize = SD->boxsize;
+  int usePairlist = flags & SVD_USE_PAIRLIST;
+  
+  for(i=0 ; i < (SD->N)-1 ; i++) {
+    j=i+1;
+  
+    if (usePairlist) {
+      // pairlist
+      int ni = SD->pairlist[i*pairsRowsize];
+      for (ni -= 1;  ni>=0;  ni-- ) {
+        j = SD->pairlist[i*pairsRowsize + 2 + ni];
+        if (j <= i)
+  	continue;
+        double d = distance(q, boxsize, i, j);
+        if (d < maxdist) {
+	  n++;
+        }
+      }
+    } else {
+      // NO pairlist
+      for (; j<SD->N ; j++ ) {
+        if (i == j) continue;
+        //double d = forcedotr_i_sub(qi0, qi1, qi2, j, SD->q, SD->boxsize);
+        double d = distance(q, boxsize, i, j);
+        if (d < maxdist) {
+	  n++;
+        }
+      }
+    }
+  }
+  return(n);
+}
+
 
 
 
@@ -689,6 +690,7 @@ int pairlistCheck(struct SimData *SD, double warn, int flags) {
 	if (! foundInPairlist) {
 	  printf("Atom %d should be in atom %d's pairlist, but isn't (d=%f).\n",
 		 j, i, d);
+	  nviolations++ ;
 	  // We want to record the closest distance of all atoms that were
 	  // not in the original pairlist.
 	  if (d < minDistance) { // store the closest approach for an 

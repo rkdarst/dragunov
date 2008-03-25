@@ -208,6 +208,12 @@ def loadCLibrary(filename,
     c_forcedotr_total.argtypes = (SimData_p,       # SimData_p
                                   ctypes.c_int)    # flags
 
+    c_nCloserThan = dragunov_c.nCloserThan
+    c_nCloserThan.restype = ctypes.c_int
+    c_nCloserThan.argtypes = (SimData_p,       # SimData_p
+                              ctypes.c_double, # maxdist
+                              ctypes.c_int)    # flags
+
     c_calcForce = dragunov_c.calcForce
     c_calcForce.restype = ctypes.c_double    # always returns zero
     c_calcForce.argtypes = (SimData_p,       # qdata_p
@@ -512,25 +518,21 @@ class System(object):
         This must be done before self.force will be updated.
         """
         self.C.calcForce(self.SD_p, self.flags)
-    def pressure_c(self, add=False):
-        flags = self.flags
-        flags = flags | SVD_ENERGYI_PARTIAL
-        #fdotr = 0
-        #forcedotr_i = self.C.forcedotr_i
-        #
-        #for i in range(0, self.N-1):
-        #    fdotr += forcedotr_i(self.SD_p, i, flags)
-        #print "orig fdotr:", fdotr
-
-        fdotr = self.C.forcedotr_total(self.SD_p, flags)
-        #print "fdotr:", fdotr
-        
+    def pressure_c(self, add=True):
+        fdotr = self.C.forcedotr_total(self.SD_p, self.flags)
         volume = self.volume
         dimensions = 3
                  # v-- should be "+" for LJ correct results
                  # v-- this also makes pressure increase with
                  #     increasing density for S2S- 2s units
         pressure = + fdotr / (dimensions * volume)
+
+        if False:
+            dr = .005
+            R = 1.
+            n = self.C.nCloserThan(self.SD_p, R+dr, self.flags)
+            print n
+            pressure += R * n / (dimensions * volume * dr * self.beta)
         if add:
             pressure += self.density/self.beta
         self._pressureList.append(pressure)
