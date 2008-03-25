@@ -298,6 +298,9 @@ class System(object):
             # default to 1 V move for every N+1 steps
             self.setMoveProb(shift=self.N, isobaric=1)
             print "info: setting to isobaric ensemble (NPT)"
+        else:
+            self.setMoveProb(shift=self.N, isobaric=0)
+
 
         self.naccept = 0
         self.ntry = 0
@@ -373,12 +376,13 @@ class System(object):
     def loginfo(self, fileobject=None):
         if fileobject is None:
             fileobject = sys.stdout
-        print >> "# mcsteps mctime T N rho E P Pavg, V, Vavg, rho_avg, mu"
+        print >> fileobject, \
+              "# mcsteps mctime T N rho E P Pavg, V, Vavg, rho_avg, mu"
     
     def log(self, fileobject, pressure=True,):
         print >> fileobject, self.mcsteps, self.mctime, self.T, self.N, \
               self.density, self.energy(), \
-              self.pressure(add=True), self.pressureAverage(), \
+              self.pressure(), self.pressureAverage(), \
               self.volume, self.volumeAverage(), \
               self.acceptRatioShift(), self.acceptRatioShiftLast(), \
               self.acceptRatioIsobaric(), self.acceptRatioIsobaricLast()
@@ -584,14 +588,26 @@ class System(object):
                 self.N, int(accept), Eold, Enew, self.naccept/self.ntry)
 
     def trialMove_c(self, n=1, verbose=False):
-        """Try n moves using metropolis criteria, using C function"""
-        # flags: 4 = verbose
-        nsteps = n * self._movesPerCycle
-        naccept = self.C.trialMove(self.SD_p, nsteps, self.flags)
-        self.mcsteps += nsteps
-        self.mctime += n
-        if verbose:
-            print "%10s moves"%self.ntry, round(self.naccept/self.ntry, 4)
+        """Do n move cycles.
+
+        A move cycle is defined as running the number of steps defined
+        with the setMoveProb method.  By default, a cycle will run
+        Natoms steps.  Thus, each trial move runs approximately the
+        same amount of real sampling regardless of the number of atoms
+        in the system."""
+        # We have to do an explicit loop, or else we won't be able to
+        # do the pairlist regeneration at each step.
+        for i in xrange(n):
+            if self.flags & SVD_USE_PAIRLIST:
+                if self._pairlist_warn and self.mctime != 0:
+                    self.pairlistCheck()
+                self.pairlistInit()
+            nsteps = self._movesPerCycle
+            naccept = self.C.trialMove(self.SD_p, nsteps, self.flags)
+            self.mcsteps += nsteps
+            self.mctime += 1
+        #if verbose:
+        #    print "%10s moves"%self.ntry, round(self.naccept/self.ntry, 4)
         
     trialMove = trialMove_c
     def widomInsert(self, type=0, n=None):
@@ -800,19 +816,55 @@ class System(object):
     # There are various functions I've made for calculating pairlists,
     # but they haven't been tested fully.  (I have tested them, and
     # they seem to work, but I need to double check them.)
-    def pairlistInit(self, cutoff):
-        """Initilize th
+    def pairlistInit(self, cutoff=None):
+        """Fill the pairlist with distance information.
+
+        See `pairlistEnable`.
         """
+        if cutoff is None:
+            cutoff = self._pairlist_cutoff
         flags = self.flags
         return self.C.pairlistInit(self.SD_p, cutoff, flags)
         
-    def pairlistCheck(self, warn, strict=False):
+    def pairlistCheck(self, warn=None, strict=False):
+        """Check pairlists for too-close violations
+
+        See `pairlistEnable`.
+        """
+        if warn is None:
+            warn = self._pairlist_warn
+            strict = self._pairlist_strict
         nviolations = self.C.pairlistCheck(self.SD_p, warn, self.flags)
         if nviolations:
-            print "nviolatios:", nviolations, "at step", self.ntry
+            print "nviolatios:", nviolations, "at step", self.mctime
         if strict:
             assert nviolations == 0
         #print self.SD.pairlist_minDistance
+    def pairlistEnable(self, cutoff, warn=None, strict=False):
+        """Enable and store data about pairlists.
+
+        This function is your one stop for enabling everything related
+        to pairlists.  This function sets the SVD_USE_PAIRLIST flag
+        for the system object, which makes pairlist get regerated
+        automatically every cycle when trialMove is called (once per
+        cycle, not once per trialMove function call).
+
+        Use the `cutoff` parameter to set the distance at which atoms
+        are recorded.
+
+        If the parameter `warn` is set, at each cycle the `
+        pairlistCheck` method will be called, to see if there are any
+        atoms at a distance less than `warn`.  If so, a message will
+        be printed.  Furthermore, if `strict` is set to be true, then
+        an AssertionError will be raised, abruptly halting all
+        computations.
+        """
+        self.flags |= SVD_USE_PAIRLIST
+        self._pairlist_cutoff = cutoff
+        self._pairlist_warn = warn
+        self._pairlist_strict = strict
+        
+        
     def removeOverlaps(self, Emax=float('inf')):
         """Remove overlaps of atoms (make energy non-infinite)
 
@@ -924,6 +976,30 @@ class System(object):
                 for i in range(natoms):
                     line = fo.readline().split()
                     self.q[i] = float(line[0]), float(line[1]), float(line[2])
+    def hash(self):
+        """Return a checksum of system state
+
+        Note that Python defines a hash very specifically--
+        specifically, a hash must stay the same for anything with the
+        same data, and a hash must not change (so that it can be used
+        for keys for things like dictionaries.)  This hash
+        implementation violates both of these:
+        - There is data that can change in this object and not be
+          reflected in the hash
+        - The object is mutable, and the hash can change.
+        As such, this is defined as `hash`, not the magic method
+        `__hash__`.
+
+        The data this hash is computed by is: q, qold, boxsize,
+        atomtypes, N
+        """
+        x = ( hash(tuple( tuple(i) for i in self.q)),
+              hash(tuple( tuple(i) for i in self.qold)),
+              hash(tuple( i for i in self.boxsize)),
+              hash(tuple( i for i in self.atomtypes)),
+              self.N
+              )
+        return hash(x)
             
 
 def readUghfile(filename):
