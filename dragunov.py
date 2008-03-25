@@ -536,9 +536,10 @@ class System(object):
                  #     increasing density for S2S- 2s units
         pressure = + fdotr / (dimensions * volume)
 
-        if False:
-            dr = .005
-            R = 1.
+        if hasattr(self, "hardcorePressureParams"):
+            #dr = .005
+            #R = 1.
+            R, dr = self.hardcorePressureParams
             n = self.C.nCloserThan(self.SD_p, R+dr, self.flags)
             print n
             pressure += R * n / (dimensions * volume * dr * self.beta)
