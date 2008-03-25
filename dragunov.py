@@ -380,24 +380,33 @@ class System(object):
         return ((self.SD.naccept_isobaric - self.SD.naccept_isobaric_last) /
                 (self.SD.ntry_isobaric    - self.SD.ntry_isobaric_last))
     def loginfo(self, fileobject=None):
+        """Write a header to the logfile.
+
+        Indicates order of fields logged."""
         if fileobject is None:
             fileobject = sys.stdout
         print >> fileobject, \
-              "# mcsteps mctime T N rho E P Pavg, V, Vavg, rho_avg, mu"
+              "# mcsteps mctime T N density E P Pavg V Vavg AR_shift AR_shift_last AR_isobaric AR_isobaric_last"
     
-    def log(self, fileobject, pressure=True,):
+    def log(self, fileobject=None, pressure=True,):
+        """Write a standard line to the logfile
+
+        If `fileobject` is Nono, write to stdout.  The order of fields
+        is:
+
+        # 1       2      3 4 5       6 7 8    9 10
+        # mcsteps mctime T N density E P Pavg V Vavg
+        # 11       12            13          14
+        # AR_shift AR_shift_last AR_isobaric AR_isobaric_last
+        """
+        if fileobject is None:
+            fileobject = sys.stdout
         print >> fileobject, self.mcsteps, self.mctime, self.T, self.N, \
               self.density, self.energy(), \
               self.pressure(), self.pressureAverage(), \
               self.volume, self.volumeAverage(), \
               self.acceptRatioShift(), self.acceptRatioShiftLast(), \
               self.acceptRatioIsobaric(), self.acceptRatioIsobaricLast()
-        # 1       2      3 4 5       6 7 8    9 10
-        # mcsteps mctime T N density E P Pavg V Vavg
-        # 11       12            13          14
-        # AR_shift AR_shift_last AR_isobaric AR_isobaric_last
-    
-
 
     def fill(self, a=10, b=10, c=10, scale=1.):
         """Fill the box with a crystal structure"""
