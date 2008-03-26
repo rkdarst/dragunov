@@ -1005,10 +1005,10 @@ class System(object):
         The data this hash is computed by is: q, qold, boxsize,
         atomtypes, N
         """
-        x = ( hash(tuple( tuple(i) for i in self.q)),
-              hash(tuple( tuple(i) for i in self.qold)),
-              hash(tuple( i for i in self.boxsize)),
-              hash(tuple( i for i in self.atomtypes)),
+        x = ( hash(tuple( [tuple(i) for i in self.q])),
+              hash(tuple( [tuple(i) for i in self.qold])),
+              hash(tuple( [i for i in self.boxsize])),
+              hash(tuple( [i for i in self.atomtypes])),
               self.N
               )
         return hash(x)
