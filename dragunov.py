@@ -379,16 +379,21 @@ class System(object):
             return float("nan")
         return ((self.SD.naccept_isobaric - self.SD.naccept_isobaric_last) /
                 (self.SD.ntry_isobaric    - self.SD.ntry_isobaric_last))
-    def loginfo(self, fileobject=None):
+    def loginfo(self, fileobject=None, *otherdata):
         """Write a header to the logfile.
 
         Indicates order of fields logged."""
         if fileobject is None:
             fileobject = sys.stdout
+        if otherdata:
+            otherstr = "%s "*len(otherdata)
+            otherstr = otherstr%otherdata
+        else:
+            otherstr = ""
         print >> fileobject, \
-              "# mcsteps mctime T N density E P Pavg V Vavg AR_shift AR_shift_last AR_isobaric AR_isobaric_last"
+              "# mcsteps mctime T N density E P Pavg V Vavg AR_shift AR_shift_last AR_isobaric AR_isobaric_last", otherstr
     
-    def log(self, fileobject=None, pressure=True,):
+    def log(self, fileobject=None, *otherdata):
         """Write a standard line to the logfile
 
         If `fileobject` is Nono, write to stdout.  The order of fields
@@ -401,12 +406,18 @@ class System(object):
         """
         if fileobject is None:
             fileobject = sys.stdout
+        if otherdata:
+            otherstr = "%s "*len(otherdata)
+            otherstr = otherstr%otherdata
+        else:
+            otherstr = ""
         print >> fileobject, self.mcsteps, self.mctime, self.T, self.N, \
               self.density, self.energy(), \
               self.pressure(), self.pressureAverage(), \
               self.volume, self.volumeAverage(), \
               self.acceptRatioShift(), self.acceptRatioShiftLast(), \
-              self.acceptRatioIsobaric(), self.acceptRatioIsobaricLast()
+              self.acceptRatioIsobaric(), self.acceptRatioIsobaricLast(), \
+              otherstr
 
     def fill(self, a=10, b=10, c=10, scale=1.):
         """Fill the box with a crystal structure"""
