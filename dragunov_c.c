@@ -539,18 +539,16 @@ int trialMove_isobaric(struct SimData *SD, int flags) {
   double ran;
 
   //def trialMove_isobaric_py(self, pressure, lnVScale):
-  double lnVScale = SD->trialMoveIsobaricScale;
+  double scale = SD->trialMoveIsobaricScale;
   double pressure = SD->isobaricPressure;
 
   double Vold = boxsize[0] * boxsize[1] * boxsize[2];
   double Eold = energy(SD, flags);
 
-  //#Vnew = exp(ln(V + (random.random()-.5) * scale))
-  //#lengthscale = (Vnew / Vold)**(1./3.) # this may not be right
-  double linearScale = exp(((genrand_real1()/*[0,1]*/-.5) * lnVScale) / 3.);
-  double volumeScale = linearScale * linearScale * linearScale;
-
-
+  double Vnew = Vold + ((genrand_real1()/*[0,1]*/-.5) * scale);
+  double volumeScale = Vnew / Vold;
+  double linearScale = pow(volumeScale, 1./3.);
+    
   //self.q *= linearScale
   for (i=0 ; i < SD->N*3; i++) {
     q[i] *= linearScale;
@@ -559,13 +557,8 @@ int trialMove_isobaric(struct SimData *SD, int flags) {
   boxsize[0]*=linearScale; boxsize[1]*=linearScale; boxsize[2]*=linearScale;
 
   double Enew = energy(SD, flags);
-  double Vnew = Vold * volumeScale;
-
-
   double x = - SD->beta * (Enew - Eold + pressure*(Vnew-Vold) - \
-			   ((SD->N+1)/SD->beta)*log(volumeScale));
-  //printf("%f\n", x);
-
+			   ((SD->N)/SD->beta)*log(volumeScale));
   int accept;
   if (x > 0)
     accept = 1;
