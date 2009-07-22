@@ -265,7 +265,7 @@ class System(object):
 
     def __init__(self, N, forceField,
                  beta=1., Nmax=None, boxsize=(10,10,10),
-                 trialMoveScale=.25, trialMoveIsobaricScale=.10,
+                 trialMoveScale=.25, trialMoveIsobaricScale=10.,
                  isobaricPressure=None,
                  dt=.01):
         """All initilization

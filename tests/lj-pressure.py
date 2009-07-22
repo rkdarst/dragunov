@@ -7,57 +7,45 @@
 import sys
 import dragunov
 
-skip = 100
-Nsteps = 1000000
-
+Nsteps = 20000
+N = 500
+T = 2.0
 
 tests = (.1, .2, .3, .4, .5, .6, .7, .8)
+tests = (.6, )
 
 for density in tests:
-    print "density:", density
-    N = int(density * 1000)
-    logname = "tests/lj-pressure/"+"logfile-density=%s.txt"%density
-    #logname = "logfile.txt"
+    #logname = "tests/lj-pressure/"+"logfile-density=%s.txt"%density
+    logname = "logfile-lj.txt"
     logfile = file(logname, "w")
 
-    S = dragunov.System(N=N, beta=1/2.0,
-                        boxsize=(10,10,10), trialMoveScale=.25,
-                        dt=.001,
+    boxedge = (N / density)**(1/3.)
+    S = dragunov.System(N=N, beta=1/T,
+                        boxsize=(boxedge, boxedge, boxedge),
+                        trialMoveScale=.25,
+                        isobaricPressure=1.75,
                         forceField="lennardjones")
     pairlist = True
-    #if pairlist: S.flags |= dragunov.SVD_USE_PAIRLIST
     S.fillRandom()
     #S.fill()
     S.removeOverlaps(10.)
-    #S.zeroVelocity()
-    #S.pairlistInit()
-    i = 0
+
+    S.pairlistEnable(3.5, 2.75, strict=True)
     S.makebox()
     S.display()
-    S.trialMove(n=10000)
+    S.trialMove(n=10)
+    S.resetTime()
     S.display()
-    #time.sleep(5)
-    #logfile=sys.stdout
-    print >> logfile, "# i, T, rho, E, P, P_avg"
-    while i <= Nsteps:
-        #if i%10 and pairlist: S.pairlistInit(3.25)
-        i += skip
-        if i == 150000:
+
+    S.loginfo(logfile)
+    while S.mctime < Nsteps:
+        if S.mctime in (200, 2000, ):
             S.resetStatistics()
-        S.trialMove(verbose=False, n=skip)
+        S.trialMove(verbose=False, n=1)
     
-        #ke = dragunov.c_mdStep(S.SD_p, skip, 0)
-        #if 0 or pairlist: S.pairlistCheck(2.75)
-        #S.widomInsert()
-        if i % 100 == 0:
-            S.display()
-            print >> logfile, i, S.T, S.density, S.energy(), \
-                  S.pressure(add=True), S.pressureAverage() #, ke
-        print "\rstep: %d"%i,
+        S.display()
+        S.log(logfile)
+        print "\rstep: %d"%S.mctime,
         sys.stdout.flush()
         
-        #print S.pairlist
-        #S.pairlistCheck(strict=False)
         logfile.flush()
-        #time.sleep(.5)
-        #print
